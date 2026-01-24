@@ -16,6 +16,9 @@
     "cheerio": "^1.0.0-rc.12",
     "commander": "^14.0.0",
     "dotenv": "^16.4.7",
-    "node-fetch": "^3.3.0"
+    "node-fetch": "^3.3.0",
+    "googleapis": "^128.0.0",
+    "node-telegram-bot-api": "^0.64.0",
+    "chrono-node": "^2.7.0"
   }
 }
