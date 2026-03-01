@@ -67,4 +67,8 @@ coverage/
 # Misc
 *.pid
 *.seed
+<<<<<<< HEAD
 *.pid.lock
+
+# Batch files (optional - uncomment if you don't want to commit them)
+# *.bat
