@@ -25,6 +25,7 @@ export async function monitorCommand(options = {}) {
       log(`Composition root not loaded (expected when running from src): ${formatErrorForLog(err)}`);
     }
 
+    let managerDeps = null;
     if (compositionModule?.createMonitorContext) {
       const ctx = await compositionModule.createMonitorContext({
         refreshInterval: options.refreshInterval
@@ -37,11 +38,11 @@ export async function monitorCommand(options = {}) {
       config = ctx.config;
       users = ctx.users;
       cacheEntries = ctx.cacheEntries;
+      managerDeps = { repo: ctx.repo, dateCache: ctx.dateCache, notifications: ctx.notifications };
       log('Monitor started via composition root (adapters).');
 
-      // Ensure global Telegram is initialized for UserBotManager's sendNotification calls
+      // Ensure global Telegram is initialized for quota notifications
       initializeTelegram(config.telegramBotToken, config.telegramManagerChatId);
-      // Register quota notifier so quota exceeded/resolved alerts are sent (same as fallback path)
       setSheetsQuotaNotifier((event) => {
         const msg =
           event === 'exceeded'
@@ -99,7 +100,7 @@ export async function monitorCommand(options = {}) {
 
     log(`Found ${users.length} active users`);
 
-    const manager = new UserBotManager(config);
+    const manager = new UserBotManager(config, managerDeps ?? {});
     await manager.initializeUsers(users);
 
     log('Starting monitoring loop...');

@@ -8,6 +8,7 @@ import { monitorCommand } from './commands/monitor.js';
 import { getChatIdCommand } from './commands/get-chat-id.js';
 import { testSheetsCommand } from './commands/test-sheets.js';
 import { testVfsCaptchaCommand } from './commands/test-vfs-captcha.js';
+import { healthCommand } from './commands/health.js';
 
 // CLI boundary: avoid raw stack dumps for unhandled rejections
 process.on('unhandledRejection', (reason) => {
@@ -54,6 +55,12 @@ program
   .option('--email <email>', 'Email for login attempt (use with --solve and --password)')
   .option('--password <password>', 'Password for login attempt')
   .action(testVfsCaptchaCommand);
+
+// Health check (for process managers / containers)
+program
+  .command('health')
+  .description('Health check: print status and exit 0')
+  .action(healthCommand);
 
 // Single-user command (backward compatibility)
 program

@@ -182,17 +182,14 @@ src/
 
 ### 4.1 Текущий прогресс (по фазам 0 → 5)
 
-**Фаза 0 (частично)**  
-- Сделано: ESLint, Prettier, TypeScript в проекте.  
-- В заделе: контракты в `ports/` (типы и JSDoc).
+**Фаза 0 (выполнена)**  
+- ESLint, Prettier, TypeScript в проекте. Контракты в `ports/` (AppConfig, ConfigProvider, DateCache, NotificationSender, UserRepository, VisaProvider, User) с JSDoc/TSDoc и @implemented_by.
 
-**Фаза 1 (частично)**  
-- Сделано: конфиг через провайдер (EnvConfigProvider), уведомления через адаптер (TelegramNotificationAdapter) в контуре composition root.  
-- В заделе: явные порты DateCache, NotificationSender, Config; вызовы только через интерфейсы.
+**Фаза 1 (выполнена)**  
+- Порты DateCache, NotificationSender, Config описаны; адаптеры DateCacheAdapter, TelegramNotificationAdapter, EnvConfigProvider. При запуске через composition root UserBotManager получает `repo`, `dateCache`, `notifications` и ведёт вызовы через интерфейсы; fallback-путь по-прежнему использует lib.
 
-**Фаза 2 (частично)**  
-- Сделано: SheetsUserRepository, VisaProviderFactory (AIS); composition root `createMonitorContext.ts` — при запуске из `dist` monitor использует адаптеры (репозиторий, Telegram, EnvConfig). Кэш инициализируется в цикле через `initializeCache(cacheEntries)`. В `monitor.js` при composition root вызываются `initializeTelegram(...)` и `setSheetsQuotaNotifier(...)` — паритет с fallback-путём. SheetsUserRepository: `rowIndex`, `timeSlot` без нормализации; в `sheets.js` JSDoc типы.  
-- В заделе: полный порт UserRepository; VFS в фабрике.
+**Фаза 2 (выполнена)**  
+- UserRepository (полный порт), SheetsUserRepository. VisaProviderFactory: AIS и VFS (vfsglobal). Composition root возвращает `repo`, `dateCache`, `notifications`; в monitor передаются в UserBotManager.
 
 **Фаза 3 (выполнена)**  
 - Use cases в `src/application/`: `startMonitor.js`, `checkUserWithCache.js`, `attemptBooking.js`. UserBotManager — тонкий оркестратор: зависимости + сценарии + ротация.
@@ -200,9 +197,8 @@ src/
 **Фаза 4 (выполнена)**  
 - Домен (User, userRotation) без импортов из адаптеров. Юнит-тесты домена (Node.js `node:test`).
 
-**Фаза 5 (частично)**  
-- Сделано: логирование (pino, `LOG_LEVEL`, `log()` → `logger.info()`); обработка ошибок (formatErrorForLog, на границе CLI — `logger.error({ err }, msg)`, без сырого stack в production); VisaProviderFactory при неизвестном `providerId` выбрасывает явную ошибку.  
-- В заделе: п.15 (health endpoint, метрики).
+**Фаза 5 (выполнена)**  
+- Логирование (pino, `LOG_LEVEL`); обработка ошибок на границе CLI; health-команда `node src/index.js health` (п.15, без метрик).
 
 ### 4.2 Фаза 0: Подготовка
 
@@ -235,7 +231,7 @@ src/
 
 13. **Логирование (выполнено):** pino, уровни через `LOG_LEVEL`, `log()` → `logger.info()`.
 14. **Обработка ошибок (выполнено):** `formatErrorForLog`, на границе CLI — `logger.error({ err }, msg)`, без сырого stack в production.
-15. **Опционально:** health endpoint, метрики (проверки, букинги в час).
+15. **Health (выполнено):** команда `health` — JSON `{ status, ts }`, exit 0. Метрики (проверки, букинги в час) — в заделе.
 
 ---
 

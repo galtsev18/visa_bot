@@ -1,14 +1,18 @@
 /**
  * Composition root for the monitor command.
  * Creates adapters, initializes them, merges config from Settings sheet,
- * and returns config + initial data (users, cacheEntries) for the monitoring loop.
+ * and returns config + initial data + adapters for the monitoring loop.
  * Use this when running from dist so the monitor uses ports/adapters for setup.
  */
 
 import type { AppConfig } from '../ports/AppConfig.js';
+import type { UserRepository } from '../ports/UserRepository.js';
+import type { DateCache } from '../ports/DateCache.js';
+import type { NotificationSender } from '../ports/NotificationSender.js';
 import { EnvConfigProvider } from '../adapters/EnvConfigProvider.js';
 import { SheetsUserRepository } from '../adapters/SheetsUserRepository.js';
 import { TelegramNotificationAdapter } from '../adapters/TelegramNotificationAdapter.js';
+import { DateCacheAdapter } from '../adapters/DateCacheAdapter.js';
 import {
   validateEnvForSheets,
   validateMultiUserConfig,
@@ -16,6 +20,10 @@ import {
 
 export interface MonitorContext {
   config: AppConfig;
+  /** Adapters for use when running via composition root (monitor passes to UserBotManager). */
+  repo: UserRepository;
+  dateCache: DateCache;
+  notifications: NotificationSender;
   users: Array<{
     email: string;
     password: string;
@@ -84,7 +92,10 @@ export async function createMonitorContext(
 
   const { users, cacheEntries } = await repo.getInitialData();
 
-  // Cache is initialized in the monitor loop via initializeCache(cacheEntries) from lib/dateCache.js
+  const dateCache = new DateCacheAdapter();
+  await dateCache.initialize(
+    cacheEntries as Parameters<DateCache['initialize']>[0]
+  );
 
-  return { config, users, cacheEntries };
+  return { config, users, cacheEntries, repo, dateCache, notifications };
 }

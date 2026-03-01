@@ -27,6 +27,7 @@ export interface DateCacheClient {
 /**
  * Port: cache of available appointment dates per provider.
  * Can be in-memory only or in-memory + persist to storage (e.g. Sheets).
+ * @implemented_by DateCacheAdapter (adapters), wraps lib/dateCache.js
  */
 export interface DateCache {
   getAvailableDates(provider?: string): string[];

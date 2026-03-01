@@ -18,6 +18,7 @@ export type ProviderSession = Record<string, unknown>;
 /**
  * Port: visa appointment provider (AIS, VFS Global, etc.).
  * Implementations handle HTTP, captcha, and provider-specific APIs.
+ * @implemented_by AisProvider (lib/providers/ais), VfsGlobalProviderAdapter (adapters)
  */
 export interface VisaProvider {
   readonly name: string;

@@ -29,9 +29,20 @@ import { checkUserWithCache as checkUserWithCacheUseCase } from '../application/
 import { attemptBooking as attemptBookingUseCase } from '../application/attemptBooking.js';
 import { startMonitor as startMonitorUseCase } from '../application/startMonitor.js';
 
+/**
+ * Optional dependencies (ports). When provided (e.g. from composition root),
+ * use them instead of lib/sheets, lib/dateCache, lib/telegram.
+ * @typedef {{ repo?: import('../ports/UserRepository.js').UserRepository, dateCache?: import('../ports/DateCache.js').DateCache, notifications?: import('../ports/NotificationSender.js').NotificationSender }} ManagerDeps
+ */
+
 export class UserBotManager {
-  constructor(config) {
+  /**
+   * @param {object} config - App config
+   * @param {ManagerDeps} [deps] - Optional adapters (repo, dateCache, notifications). When set, use ports instead of lib.
+   */
+  constructor(config, deps = {}) {
     this.config = config;
+    this.deps = deps;
     this.users = [];
     this.bots = new Map(); // email -> Bot instance
     this.sessions = new Map(); // email -> session headers
@@ -106,14 +117,21 @@ export class UserBotManager {
    * @returns {Promise<string|null>} - Available date or null
    */
   async checkUserWithCache(user) {
+    const dc = this.deps.dateCache;
+    const cacheDeps = dc
+      ? {
+          getAvailableDates: (p) => dc.getAvailableDates(p),
+          isCacheStale: (date, ttl, p) => dc.isCacheStale(date, ttl, p),
+          refreshAllDates: (client, headers, scheduleId, facilityId, ttl, p, opts) =>
+            dc.refreshAllDates(client, headers, scheduleId, facilityId, ttl, p, opts),
+          isDateAvailable: (date, p) => dc.isDateAvailable(date, p),
+        }
+      : { getAvailableDates, isCacheStale, refreshAllDates, isDateAvailable };
     return checkUserWithCacheUseCase(user, {
       bot: this.bots.get(user.email),
       sessionHeaders: this.sessions.get(user.email),
       config: this.config,
-      getAvailableDates,
-      isCacheStale,
-      refreshAllDates,
-      isDateAvailable,
+      ...cacheDeps,
       log,
     });
   }
@@ -125,14 +143,29 @@ export class UserBotManager {
    * @returns {Promise<boolean>}
    */
   async attemptBooking(user, date) {
+    const repo = this.deps.repo;
+    const notif = this.deps.notifications;
+    const chatId = String(this.config.telegramManagerChatId ?? '');
+    const bookingDeps = repo
+      ? {
+          updateUserCurrentDate: (e, d, t, r) => repo.updateUserCurrentDate(e, d, t, r),
+          updateUserLastBooked: (e, d, t, r) => repo.updateUserLastBooked(e, d, t, r),
+          logBookingAttempt: (a) => repo.logBookingAttempt(a),
+        }
+      : {
+          updateUserCurrentDate,
+          updateUserLastBooked,
+          logBookingAttempt,
+        };
+    const sendNotificationFn = notif
+      ? (msg) => notif.send(msg, chatId)
+      : (msg) => sendNotification(msg, chatId);
     return attemptBookingUseCase(user, date, {
       bot: this.bots.get(user.email),
       sessionHeaders: this.sessions.get(user.email),
       config: this.config,
-      updateUserCurrentDate,
-      updateUserLastBooked,
-      logBookingAttempt,
-      sendNotification,
+      ...bookingDeps,
+      sendNotification: sendNotificationFn,
       formatBookingSuccessWithDetails,
       formatBookingFailure,
       log,
@@ -146,18 +179,28 @@ export class UserBotManager {
   async monitorWithRotation(initialCacheEntries) {
     log('Starting monitoring loop with rotation...');
 
+    const dc = this.deps.dateCache;
+    const repo = this.deps.repo;
+    const notif = this.deps.notifications;
+    const chatId = String(this.config.telegramManagerChatId ?? '');
+    const initCache = dc ? () => Promise.resolve() : initializeCache;
+    const getStats = dc ? () => dc.getCacheStats() : getCacheStats;
+    const sendNotif = notif
+      ? (msg, chatIdArg) => notif.send(msg, chatIdArg || chatId)
+      : (msg, chatIdArg) => sendNotification(msg, chatIdArg || chatId);
+
     await startMonitorUseCase(initialCacheEntries, {
-      initializeCache,
-      getCacheStats,
+      initializeCache: initCache,
+      getCacheStats: getStats,
       formatMonitorStarted,
-      sendNotification,
+      sendNotification: sendNotif,
       users: this.users,
       config: this.config,
     });
 
     while (true) {
       try {
-        // Refresh users from Sheets periodically
+        // Refresh users from storage periodically
         const now = new Date();
         if (
           !this.lastSheetsRefresh ||
@@ -165,22 +208,32 @@ export class UserBotManager {
         ) {
           log('Refreshing users and settings from Google Sheets...');
           try {
-            const [sheetSettings, freshUsers] = await Promise.all([
-              readSettingsFromSheet(),
-              readUsers(),
-            ]);
-            delete sheetSettings.googleSheetsId;
-            delete sheetSettings.googleCredentialsPath;
-            Object.assign(this.config, sheetSettings);
-            await this.initializeUsers(freshUsers);
-            this.lastSheetsRefresh = now;
-            log(`Refreshed users: ${freshUsers.length} active users`);
+            if (repo) {
+              const [sheetSettings, freshUsers] = await Promise.all([
+                repo.getSettingsOverrides(),
+                repo.getActiveUsers(),
+              ]);
+              Object.assign(this.config, sheetSettings);
+              await this.initializeUsers(freshUsers);
+              this.lastSheetsRefresh = now;
+              log(`Refreshed users: ${freshUsers.length} active users`);
+            } else {
+              const [sheetSettings, freshUsers] = await Promise.all([
+                readSettingsFromSheet(),
+                readUsers(),
+              ]);
+              delete sheetSettings.googleSheetsId;
+              delete sheetSettings.googleCredentialsPath;
+              Object.assign(this.config, sheetSettings);
+              await this.initializeUsers(freshUsers);
+              this.lastSheetsRefresh = now;
+              log(`Refreshed users: ${freshUsers.length} active users`);
+            }
           } catch (error) {
             log(`Failed to refresh users: ${formatErrorForLog(error)}`);
           }
         }
 
-        // Get next user to check
         const user = getNextUser(this.users, this.config.rotationCooldown);
 
         if (!user) {
@@ -191,18 +244,17 @@ export class UserBotManager {
 
         log(`Checking user ${user.email}...`);
 
-        // Check for available dates
         const availableDate = await this.checkUserWithCache(user);
 
         if (availableDate) {
-          // Notify: matching slot found, attempting to book
           const slotFoundMsg = formatSlotFound(user, availableDate);
-          await sendNotification(slotFoundMsg, this.config.telegramManagerChatId);
-          // Attempt booking
+          await sendNotif(slotFoundMsg);
           await this.attemptBooking(user, availableDate);
         } else {
-          // Log that no valid date was found
-          await logBookingAttempt({
+          const logAttempt = repo
+            ? (a) => repo.logBookingAttempt(a)
+            : logBookingAttempt;
+          await logAttempt({
             user_email: user.email,
             date_attempted: null,
             result: 'skipped',
@@ -210,15 +262,20 @@ export class UserBotManager {
           });
         }
 
-        // Update user metadata
         const checkedAt = new Date();
         updateUserPriority(user, checkedAt);
-        await Promise.all([
-          updateUserLastChecked(user.email, checkedAt, user.rowIndex),
-          updateUserPriorityInSheets(user.email, user.priority, user.rowIndex),
-        ]);
+        if (repo) {
+          await Promise.all([
+            repo.updateUserLastChecked(user.email, checkedAt, user.rowIndex),
+            repo.updateUserPriority(user.email, user.priority, user.rowIndex),
+          ]);
+        } else {
+          await Promise.all([
+            updateUserLastChecked(user.email, checkedAt, user.rowIndex),
+            updateUserPriorityInSheets(user.email, user.priority, user.rowIndex),
+          ]);
+        }
 
-        // Sleep before next iteration
         await sleep(this.config.refreshInterval);
       } catch (error) {
         log(`Error in monitoring loop: ${formatErrorForLog(error)}`);

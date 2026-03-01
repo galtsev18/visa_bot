@@ -34,6 +34,7 @@ export interface BookingAttemptLog {
 /**
  * Port: user and settings storage (e.g. Google Sheets).
  * All user list, updates, and logs go through this interface.
+ * @implemented_by SheetsUserRepository (adapters)
  */
 export interface UserRepository {
   getActiveUsers(): Promise<User[]>;
