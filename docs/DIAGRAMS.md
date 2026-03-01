@@ -10,28 +10,30 @@ C4, DFD и sequence-диаграммы в формате Mermaid. Рендер: 
 
 ### 1.1 Level 1 — System Context (Контекст системы)
 
-Кто использует систему и с какими внешними системами она взаимодействует.
+Кто использует систему и с какими внешними системами она взаимодействует. Подписи на связях укорочены, чтобы уменьшить наложение при рендере.
 
 ```mermaid
 C4Context
     title System Context — US Visa Bot
 
-    Person(operator, "Оператор", "Запускает monitor/bot, смотрит логи и Telegram")
-    Person(user, "Пользователь визы", "Получает уведомления о слотах/букинге")
+    Person(operator, "Оператор", "Запуск monitor/bot")
+    Person(user, "Пользователь визы", "Уведомления")
 
-    System(visabot, "US Visa Bot", "Мониторинг слотов и автоматический перенос записи на собеседование по визе США")
+    System(visabot, "US Visa Bot", "Мониторинг слотов и перенос записи на собеседование")
 
-    System_Ext(sheets, "Google Sheets", "Хранилище пользователей, кэша дат, логов, настроек")
-    System_Ext(telegram, "Telegram Bot API", "Уведомления оператору")
-    System_Ext(ais, "AIS (ais.usvisa-info.com)", "Система записи на собеседование — слоты, букинг")
-    System_Ext(vfs, "VFS Global", "Альтернативный провайдер записи (задел)")
+    System_Ext(sheets, "Google Sheets", "Users, кэш дат, логи, настройки")
+    System_Ext(telegram, "Telegram Bot API", "Уведомления")
+    System_Ext(ais, "AIS", "Слоты и букинг")
+    System_Ext(vfs, "VFS Global", "Провайдер записи (задел)")
 
-    Rel(operator, visabot, "Запускает CLI, настраивает")
-    Rel(visabot, sheets, "Читает/пишет пользователей, кэш, логи")
-    Rel(visabot, telegram, "Отправляет уведомления")
-    Rel(visabot, ais, "Логин, даты, время, букинг")
-    Rel(visabot, vfs, "Логин, даты, букинг (опционально)")
-    Rel(visabot, user, "Уведомляет о результате")
+    Rel(operator, visabot, "CLI")
+    Rel(visabot, sheets, "R/W")
+    Rel(visabot, telegram, "Уведомления")
+    Rel(visabot, ais, "Слоты, букинг")
+    Rel(visabot, vfs, "Слоты (опц.)")
+    Rel(visabot, user, "Уведомления")
+
+    UpdateLayoutConfig(3, 2)
 ```
 
 ### 1.2 Level 2 — Container (Контейнеры)
@@ -129,9 +131,9 @@ flowchart LR
     end
 
     subgraph Process
-        P1[Composition Root\nили Fallback]
+        P1[Composition Root<br/>или Fallback]
         P2[UserBotManager]
-        P3[Check User\n+ Cache]
+        P3[Check User<br/>+ Cache]
         P4[Attempt Booking]
     end
 
@@ -163,13 +165,13 @@ DFD Level 1 — монитор, один цикл по пользователю:
 ```mermaid
 flowchart TB
     subgraph Sources
-        S1[Google Sheets\nUsers, Settings]
+        S1[Google Sheets<br/>Users, Settings]
         S2[Available Dates Cache]
     end
 
     subgraph "Monitor Process"
         A[Load users & config]
-        B[Select next user\nrotation]
+        B[Select next user<br/>rotation]
         C[Refresh cache if stale]
         D[Get available dates]
         E[Filter by user validity]
@@ -179,7 +181,7 @@ flowchart TB
     end
 
     subgraph Sinks
-        T1[Google Sheets\nUpdates, Logs]
+        T1[Google Sheets<br/>Updates, Logs]
         T2[Telegram]
         T3[AIS/VFS API]
     end
