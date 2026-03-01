@@ -102,8 +102,8 @@ npm run dev -- test-sheets
 # Start monitoring (dev)
 npm run dev -- monitor
 
-# Production (and VFS support)
-npm run build && npm start monitor
+# Production (and VFS support). Use -- to pass arguments to the start script.
+npm run build && npm start -- monitor
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) or [SETUP.md](SETUP.md) for detailed setup instructions.

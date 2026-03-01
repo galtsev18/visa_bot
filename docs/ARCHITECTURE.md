@@ -56,7 +56,7 @@ src/
 │   ├── VisaProvider.ts
 │   └── User.ts
 └── lib/
-    ├── config.js, logger.js, utils.js
+    ├── config.js, logger.js, logger.ts, utils.js
     ├── user.js, userRotation.js       # Домен
     ├── userBotManager.js              # Оркестратор monitor
     ├── bot.js, client.js              # Один бот и AIS HTTP

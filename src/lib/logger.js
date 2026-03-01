@@ -1,18 +1,5 @@
 /**
- * Structured logger with levels (Phase 5).
- * LOG_LEVEL env: 'trace' | 'debug' | 'info' | 'warn' | 'error' (default: 'info').
- * In production, output is JSON; pipe to pino-pretty for readable dev logs.
+ * Re-export from TypeScript source. Required so that import './lib/logger.js' resolves
+ * when running from src (tsx); dist has logger.js from compiling logger.ts.
  */
-import pino from 'pino';
-
-const level = (process.env.LOG_LEVEL || 'info').toLowerCase();
-
-export const logger = pino({
-  level,
-  base: undefined,
-  formatters: {
-    level: (label) => ({ level: label }),
-  },
-});
-
-export default logger;
+export { logger, default } from './logger.ts';

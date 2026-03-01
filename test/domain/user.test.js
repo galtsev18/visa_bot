@@ -80,7 +80,11 @@ describe('User', () => {
       });
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const dateStr = tomorrow.toISOString().slice(0, 10);
+      tomorrow.setHours(0, 0, 0, 0);
+      const y = tomorrow.getFullYear();
+      const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const d = String(tomorrow.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
       assert.strictEqual(user.isDateAfterReactionTime(dateStr), true);
     });
   });
