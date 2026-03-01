@@ -27,10 +27,11 @@ src/
 │   └── test-vfs-captcha.js
 ├── composition/
 │   └── createMonitorContext.ts   # Composition root для monitor (dist)
-├── application/          # Use cases
-│   ├── startMonitor.js
-│   ├── checkUserWithCache.js
-│   └── attemptBooking.js
+├── application/          # Use cases (TypeScript; .js — реэкспорт из .ts, src не импортирует из dist)
+│   ├── startMonitor.ts
+│   ├── checkUserWithCache.ts
+│   ├── attemptBooking.ts
+│   └── types.ts
 ├── adapters/             # Реализации портов
 │   ├── SheetsUserRepository.js
 │   ├── TelegramNotificationAdapter.js
@@ -61,17 +62,19 @@ src/
 
 ### 1.3 Выявленные проблемы архитектуры
 
-| Проблема | Где | Описание |
-|----------|-----|----------|
-| **Дублирование AIS-логики** | `client.js` vs `providers/ais.js` | Bot использует только `VisaHttpClient`; провайдер AIS не используется в основном потоке. |
-| **Нет единого провайдера** | Bot, UserBotManager | Есть `user.provider`, кэш по провайдерам, но Bot завязан на `client.js`. Нет фабрики провайдеров. |
-| **Глобальное состояние** | sheets.js, dateCache.js, telegram.js | Модули с `let sheets`, `let cache` усложняют тесты. |
-| **Смешение слоёв** | UserBotManager, monitor.js | Оркестрация, кэш, Sheets, Telegram и букинг в одном месте. |
-| **Конфиг из двух источников** | config.js + Settings sheet | .env и лист Settings смешиваются после старта; валидация размазана. |
-| **Нет типизации** | Весь проект | Только JSDoc местами; сложнее рефакторинг и контракты. |
-| **Повторяющаяся работа с Sheets** | sheets.js | Дублирование: getColumnIndex, поиск по email; нет абстракции «репозиторий». |
-| **Жёсткая связь с Google Sheets** | UserBotManager | Нельзя подменить источник (БД/API) без правок по коду. |
-| **Один процесс на всё** | monitor | Масштабирование только вертикальное. |
+| Проблема | Где | Описание | Статус |
+|----------|-----|----------|--------|
+| **Дублирование AIS-логики** | `client.js` vs `providers/ais.js` | При запуске через composition root Bot получает ProviderBackedClient (AisProvider); без dist по умолчанию — VisaHttpClient. | Частично решено (один путь через провайдер при наличии адаптеров) |
+| **Нет единого провайдера** | Bot, UserBotManager | Фабрика `VisaProviderFactory` и `ProviderBackedClient` есть; при загрузке адаптеров из dist используется провайдер по `user.provider`. | Решено |
+| **Глобальное состояние** | sheets.js, dateCache.js, telegram.js | Модули с `let sheets`, `let cache`, `let bot`; при передаче deps из composition root вызовы идут через порты, но сами lib-модули по-прежнему с глобальным состоянием. | Актуально |
+| **Смешение слоёв** | UserBotManager, monitor.js | Use cases вынесены в application/; UserBotManager — оркестратор. При отсутствии deps всё ещё импортирует lib напрямую. | Частично решено |
+| **Конфиг из двух источников** | config.js + Settings sheet | .env и лист Settings смешиваются после старта; валидация в разных местах. | Актуально |
+| **Нет типизации** | Весь проект | Порты и application — TypeScript; lib, commands — в основном JS с JSDoc. | Частично решено |
+| **Повторяющаяся работа с Sheets** | sheets.js | Есть порт UserRepository и SheetsUserRepository; низкоуровневая логика в sheets.js с дублированием getColumnIndex, поиск по email. | Частично решено |
+| **Жёсткая связь с Google Sheets** | UserBotManager | Порт UserRepository позволяет подменить источник; реализация по умолчанию — Sheets. | Решено (на уровне порта) |
+| **Один процесс на всё** | monitor | Один цикл: ротация, кэш, букинг. Масштабирование только вертикальное. | Актуально |
+
+*Статус приведён после завершения миграции (порты, адаптеры, use cases на TypeScript, composition root).*
 
 ---
 
@@ -146,12 +149,21 @@ src/
 Все фазы 0–5 выполнены. Текущее состояние:
 
 - **Порты и адаптеры:** контракты в `ports/` (AppConfig, ConfigProvider, DateCache, NotificationSender, UserRepository, VisaProvider, User). DateCache, NotificationSender, ConfigProvider, UserRepository, VisaProvider — реализованы; composition root (`createMonitorContext.ts`) и fallback (`createFallbackAdapters()`) передают их в UserBotManager.
-- **Use cases:** `startMonitor`, `checkUserWithCache`, `attemptBooking` в `src/application/`; UserBotManager — оркестратор.
+- **Use cases:** `startMonitor`, `checkUserWithCache`, `attemptBooking` в `src/application/` (TypeScript); UserBotManager — оркестратор.
 - **Домен:** User, userRotation без импортов из адаптеров.
 - **Инфраструктура:** pino (LOG_LEVEL), обработка ошибок на границе CLI, команда `health`, метрики в файле.
 - **CI:** lint, typecheck, test в `.github/workflows/ci.yml`.
 
-Дальнейшие улучшения (по желанию): полная миграция application/ на TypeScript, интеграционные тесты, сокращение глобального состояния в lib (sheets, dateCache, telegram).
+Дальнейшие улучшения (по желанию): интеграционные тесты, сокращение глобального состояния в lib (sheets, dateCache, telegram).
+
+### 3.1 Неиспользуемый код после миграции
+
+| Что | Где | Действие |
+|-----|-----|----------|
+| Barrel-файл | `composition/index.ts` | Никто не импортирует из `composition/index`, только из `createMonitorContext.js`. Можно удалить или оставить для единой точки входа. |
+| Публичный API кэша | `lib/dateCache.js`: `isDateCached`, `getAvailableTimes`, `getStaleDates` | Порт DateCache и адаптер их не используют; вызовов из кода нет. Сделаны внутренними (без `export`), чтобы не раздувать публичный API. |
+
+Остальной код задействован: оба пути запуска (composition root и fallback), провайдеры, адаптеры, реэкспорты в `application/*.js`.
 
 ---
 

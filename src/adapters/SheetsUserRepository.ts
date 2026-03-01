@@ -23,7 +23,8 @@ export class SheetsUserRepository implements UserRepository {
   }
 
   async getActiveUsers(): Promise<User[]> {
-    return sheets.readUsers() as Promise<User[]>;
+    const users = await sheets.readUsers();
+    return users as User[];
   }
 
   async getSettingsOverrides(): Promise<SettingsOverrides> {
@@ -42,7 +43,8 @@ export class SheetsUserRepository implements UserRepository {
       cache_valid_until?: string;
     }>;
   }> {
-    return sheets.getInitialData();
+    const data = await sheets.getInitialData();
+    return data;
   }
 
   async updateUserLastChecked(

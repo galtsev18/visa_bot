@@ -41,7 +41,7 @@ export class ProviderBackedClient {
     scheduleId: string,
     facilityId: number,
     date: string
-  ): Promise<string | null | undefined> {
+  ): Promise<string | null> {
     const session = this.requireSession(headers);
     return this.provider.getAvailableTime(session, scheduleId, facilityId, date);
   }

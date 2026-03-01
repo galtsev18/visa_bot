@@ -21,7 +21,7 @@ export interface DateCacheClient {
     scheduleId: string,
     facilityId: number,
     date: string
-  ): Promise<string | null | undefined>;
+  ): Promise<string | null>;
 }
 
 /**

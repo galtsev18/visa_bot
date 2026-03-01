@@ -57,11 +57,11 @@ export function getAvailableDates(provider = 'ais') {
 }
 
 /**
- * Check if a date is in the cache for provider
+ * Check if a date is in the cache for provider (internal; port does not expose this).
  * @param {string} date - Date (YYYY-MM-DD)
  * @param {string} [provider='ais']
  */
-export function isDateCached(date, provider = 'ais') {
+function isDateCached(date, provider = 'ais') {
   return cache.has(cacheKey(provider, date));
 }
 
@@ -79,11 +79,11 @@ export function isDateAvailable(date, provider = 'ais') {
 }
 
 /**
- * Get available times for a date from cache
+ * Get available times for a date from cache (internal; port does not expose this).
  * @param {string} date - Date (YYYY-MM-DD)
  * @param {string} [provider='ais']
  */
-export function getAvailableTimes(date, provider = 'ais') {
+function getAvailableTimes(date, provider = 'ais') {
   const entry = cache.get(cacheKey(provider, date));
   if (!entry) return [];
   const now = new Date();
@@ -130,12 +130,12 @@ export function updateDate(date, available, times = [], ttl = 60, provider = 'ai
 }
 
 /**
- * Get stale dates that need refresh
+ * Get stale dates that need refresh (internal; not used by port/adapter).
  * @param {number} ttl - Time-to-live in seconds
  * @param {string} [provider='ais']
  * @returns {Array<string>}
  */
-export function getStaleDates(ttl = 60, provider = 'ais') {
+function getStaleDates(ttl = 60, provider = 'ais') {
   const prefix = `${(provider || 'ais').toLowerCase()}_`;
   const staleDates = [];
   const now = new Date();
