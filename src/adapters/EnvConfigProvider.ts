@@ -1,6 +1,6 @@
 import type { AppConfig } from '../ports/AppConfig.js';
 import type { ConfigProvider } from '../ports/ConfigProvider.js';
-import { getConfig } from '../lib/config.js';
+import { getConfig as getConfigFromEnv } from '../lib/config.js';
 
 /**
  * Adapter: config from .env only (via existing getConfig).
@@ -8,6 +8,6 @@ import { getConfig } from '../lib/config.js';
  */
 export class EnvConfigProvider implements ConfigProvider {
   getConfig(): AppConfig {
-    return getConfig() as AppConfig;
+    return getConfigFromEnv() as AppConfig;
   }
 }

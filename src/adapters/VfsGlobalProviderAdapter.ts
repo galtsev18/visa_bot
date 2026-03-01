@@ -3,6 +3,31 @@ import { VfsGlobalClient } from '../lib/providers/vfsglobal.js';
 
 const PROVIDER_NAME = 'vfsglobal';
 
+/** Valid VFS session shape (created by this adapter's login()). Compatible with ProviderSession. */
+interface VfsSession extends Record<string, unknown> {
+  _client: VfsGlobalClient;
+  _headers: Record<string, string>;
+}
+
+function isVfsSession(session: ProviderSession): session is VfsSession {
+  if (session == null || typeof session !== 'object') return false;
+  const s = session as Record<string, unknown>;
+  return (
+    '_client' in session &&
+    '_headers' in session &&
+    s._client != null &&
+    typeof s._client === 'object' &&
+    s._headers != null &&
+    typeof s._headers === 'object'
+  );
+}
+
+function assertVfsSession(session: ProviderSession): asserts session is VfsSession {
+  if (!isVfsSession(session)) {
+    throw new Error('Invalid VFS session: missing or invalid _client or _headers');
+  }
+}
+
 /**
  * Options for VFS Global (captcha, etc.).
  */
@@ -21,17 +46,16 @@ export class VfsGlobalProviderAdapter implements VisaProvider {
   constructor(private readonly options: VfsGlobalProviderOptions = {}) {}
 
   async login(credentials: VisaCredentials): Promise<ProviderSession> {
-    const client = new VfsGlobalClient(
-      {
-        locale: credentials.countryCode,
-        email: credentials.email,
-        password: credentials.password,
-        captchaApiKey: this.options.captchaApiKey ?? undefined,
-        captchaSolver: this.options.captchaSolver ?? undefined,
-      }
-    );
+    const client = new VfsGlobalClient({
+      locale: credentials.countryCode,
+      email: credentials.email,
+      password: credentials.password,
+      captchaApiKey: this.options.captchaApiKey ?? undefined,
+      captchaSolver: this.options.captchaSolver ?? undefined,
+    });
     const headers = await client.login();
-    return { _client: client, _headers: headers } as ProviderSession;
+    const session: VfsSession = { _client: client, _headers: headers };
+    return session;
   }
 
   async getAvailableDates(
@@ -39,10 +63,12 @@ export class VfsGlobalProviderAdapter implements VisaProvider {
     scheduleId: string,
     facilityId: number
   ): Promise<string[]> {
-    const client = (session as { _client: VfsGlobalClient })._client;
-    const headers = (session as { _headers: Record<string, string> })._headers;
-    if (!client || !headers) throw new Error('Invalid VFS session');
-    const dates = await client.checkAvailableDate(headers, scheduleId, facilityId);
+    assertVfsSession(session);
+    const dates = await session._client.checkAvailableDate(
+      session._headers,
+      scheduleId,
+      facilityId
+    );
     return dates ?? [];
   }
 
@@ -52,10 +78,13 @@ export class VfsGlobalProviderAdapter implements VisaProvider {
     facilityId: number,
     date: string
   ): Promise<string | null> {
-    const client = (session as { _client: VfsGlobalClient })._client;
-    const headers = (session as { _headers: Record<string, string> })._headers;
-    if (!client || !headers) throw new Error('Invalid VFS session');
-    return client.checkAvailableTime(headers, scheduleId, facilityId, date);
+    assertVfsSession(session);
+    return session._client.checkAvailableTime(
+      session._headers,
+      scheduleId,
+      facilityId,
+      date
+    );
   }
 
   async book(
@@ -65,9 +94,13 @@ export class VfsGlobalProviderAdapter implements VisaProvider {
     date: string,
     time: string
   ): Promise<void> {
-    const client = (session as { _client: VfsGlobalClient })._client;
-    const headers = (session as { _headers: Record<string, string> })._headers;
-    if (!client || !headers) throw new Error('Invalid VFS session');
-    await client.book(headers, scheduleId, facilityId, date, time);
+    assertVfsSession(session);
+    await session._client.book(
+      session._headers,
+      scheduleId,
+      facilityId,
+      date,
+      time
+    );
   }
 }

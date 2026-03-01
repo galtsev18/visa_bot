@@ -154,8 +154,8 @@ journalctl -u us-visa-bot -f
 From your PC, copy updated code (e.g. after git pull or local changes):
 
 ```bash
-scp -r src package.json root@82.27.201.74:/opt/us-visa-bot/
-ssh root@82.27.201.74 "cd /opt/us-visa-bot && npm install --production && systemctl restart us-visa-bot"
+scp -r src package.json root@YOUR_SERVER_IP:/opt/us-visa-bot/
+ssh root@YOUR_SERVER_IP "cd /opt/us-visa-bot && npm install --production && systemctl restart us-visa-bot"
 ```
 
 ## 5. Optional: run as a dedicated user (not root)
@@ -190,4 +190,4 @@ Put `.env` and `credentials.json` in `/home/visabot/us-visa-bot/` and ensure onl
 
 ---
 
-**Summary:** After following this guide, the bot on `82.27.201.74` runs autonomously and restarts if it crashes.
+**Summary:** After following this guide, the bot on `YOUR_SERVER_IP` runs autonomously and restarts if it crashes.
