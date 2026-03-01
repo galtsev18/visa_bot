@@ -62,7 +62,9 @@ export async function monitorCommand(options = {}) {
           event === 'exceeded'
             ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
             : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
-        sendNotification(msg, config.telegramManagerChatId);
+        sendNotification(msg, config.telegramManagerChatId).catch((err) => {
+          log(`Failed to send quota notification: ${err.message}`);
+        });
       });
 
       const data = await getInitialData();
