@@ -82,16 +82,17 @@ export async function attemptBooking(user, date, deps) {
     await sendNotification(failureMsg, config.telegramManagerChatId);
     return false;
   } catch (error) {
-    log(`Booking failed for ${user.email} on ${date}: ${error.message}`);
+    const errMsg = error?.message ?? String(error);
+    log(`Booking failed for ${user.email} on ${date}: ${errMsg}`);
 
     await logBookingAttempt({
       user_email: user.email,
       date_attempted: date,
       result: 'failure',
-      reason: error.message,
+      reason: errMsg,
     });
 
-    const message = formatBookingFailure(user, date, error.message);
+    const message = formatBookingFailure(user, date, errMsg);
     await sendNotification(message, config.telegramManagerChatId);
     return false;
   }

@@ -52,7 +52,8 @@ export async function checkUserWithCache(user, deps) {
       );
       datesToUse = getAvailableDates(provider);
     } catch (error) {
-      log(`Failed to refresh cache: ${error.message}`);
+      const errMsg = error?.message ?? String(error);
+      log(`Failed to refresh cache: ${errMsg}`);
       // Keep using existing datesToUse (stale) like original
     }
   }

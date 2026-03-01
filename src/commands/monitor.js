@@ -7,7 +7,7 @@ import {
 } from '../lib/sheets.js';
 import { initializeTelegram, sendNotification } from '../lib/telegram.js';
 import { UserBotManager } from '../lib/userBotManager.js';
-import { log, isSocketHangupError } from '../lib/utils.js';
+import { log, isSocketHangupError, formatErrorForLog } from '../lib/utils.js';
 
 const COOLDOWN = 3600; // 1 hour in seconds
 
@@ -21,7 +21,7 @@ export async function monitorCommand(options = {}) {
     try {
       compositionModule = await import('../composition/createMonitorContext.js');
     } catch (err) {
-      log(`Composition root not loaded (expected when running from src): ${err.message}`);
+      log(`Composition root not loaded (expected when running from src): ${formatErrorForLog(err)}`);
     }
 
     if (compositionModule?.createMonitorContext) {
@@ -63,7 +63,7 @@ export async function monitorCommand(options = {}) {
             ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
             : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
         sendNotification(msg, config.telegramManagerChatId).catch((err) => {
-          log(`Failed to send quota notification: ${err.message}`);
+          log(`Failed to send quota notification: ${formatErrorForLog(err)}`);
         });
       });
 
@@ -91,13 +91,14 @@ export async function monitorCommand(options = {}) {
     log('Starting monitoring loop...');
     await manager.monitorWithRotation(cacheEntries);
   } catch (err) {
+    const errMsg = formatErrorForLog(err);
     if (isSocketHangupError(err)) {
-      log(`Socket hangup error: ${err.message}. Trying again after ${COOLDOWN} seconds...`);
+      log(`Socket hangup error: ${errMsg}. Trying again after ${COOLDOWN} seconds...`);
       await new Promise((resolve) => setTimeout(resolve, COOLDOWN * 1000));
       return monitorCommand(options);
     } else {
-      log(`Error: ${err.message}`);
-      log(err.stack);
+      log(`Error: ${errMsg}`);
+      if (err?.stack) log(err.stack);
       process.exit(1);
     }
   }

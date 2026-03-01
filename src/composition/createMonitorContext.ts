@@ -8,7 +8,6 @@
 import type { AppConfig } from '../ports/AppConfig.js';
 import { EnvConfigProvider } from '../adapters/EnvConfigProvider.js';
 import { SheetsUserRepository } from '../adapters/SheetsUserRepository.js';
-import { DateCacheAdapter } from '../adapters/DateCacheAdapter.js';
 import { TelegramNotificationAdapter } from '../adapters/TelegramNotificationAdapter.js';
 import {
   validateEnvForSheets,
@@ -51,8 +50,8 @@ export interface CreateMonitorContextOptions {
 }
 
 /**
- * Build config (env + sheet overrides), initialize repo, telegram, cache;
- * return config and initial data for the monitor loop.
+ * Build config (env + sheet overrides), initialize repo and Telegram;
+ * return config and initial data for the monitor loop (cache is initialized in the loop).
  */
 export async function createMonitorContext(
   options: CreateMonitorContextOptions = {}
@@ -94,10 +93,7 @@ export async function createMonitorContext(
 
   const { users, cacheEntries } = await repo.getInitialData();
 
-  const dateCache = new DateCacheAdapter();
-  await dateCache.initialize(
-    cacheEntries as Parameters<DateCacheAdapter['initialize']>[0]
-  );
+  // Cache is initialized in the monitor loop via initializeCache(cacheEntries) from lib/dateCache.js
 
   return { config, users, cacheEntries };
 }

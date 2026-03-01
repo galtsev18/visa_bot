@@ -9,13 +9,16 @@ export function log(message) {
 }
 
 export function isSocketHangupError(err) {
+  if (err == null || typeof err !== 'object') return false;
+  const code = err.code;
+  const msg = err.message != null ? String(err.message) : '';
   return (
-    err.code === 'ECONNRESET' ||
-    err.code === 'ENOTFOUND' ||
-    err.code === 'ETIMEDOUT' ||
-    err.message.includes('socket hang up') ||
-    err.message.includes('network') ||
-    err.message.includes('connection')
+    code === 'ECONNRESET' ||
+    code === 'ENOTFOUND' ||
+    code === 'ETIMEDOUT' ||
+    msg.includes('socket hang up') ||
+    msg.includes('network') ||
+    msg.includes('connection')
   );
 }
 

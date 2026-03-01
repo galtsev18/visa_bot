@@ -191,6 +191,7 @@ src/
   - `attemptBooking.js` — букинг, обновление юзера/Sheets, логирование, уведомления.
 - **UserBotManager** — тонкий оркестратор: собирает зависимости и вызывает сценарии + ротацию.
 - **Фаза 4:** Домен (User, userRotation) без импортов из адаптеров; добавлены юнит-тесты домена (Node.js `node:test`).
+- **Composition root** (`src/composition/createMonitorContext.ts`): при запуске из `dist` (после `npm run build`) команда monitor использует адаптеры (SheetsUserRepository, TelegramNotificationAdapter, EnvConfigProvider). Кэш дат инициализируется в цикле через `initializeCache(cacheEntries)` из lib/dateCache.js.
 
 ### Фаза 0: Подготовка (без смены поведения)
 1. **Добавить TypeScript** в проект (tsconfig, компиляция или ts-node): сначала разрешить .ts рядом с .js, переносить по одному модулю.
