@@ -23,7 +23,7 @@ export class TelegramNotificationAdapter implements NotificationSender {
   }
 
   async send(message: string, chatId: string): Promise<boolean> {
-    const targetChatId = (chatId && String(chatId).trim()) || this.defaultChatId;
+    const targetChatId = String(chatId).trim();
     return sendNotification(message, targetChatId);
   }
 }

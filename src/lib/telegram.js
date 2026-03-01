@@ -1,50 +1,47 @@
-import fetch from 'node-fetch';
-import { log, formatErrorForLog } from './utils.js';
+import TelegramBot from 'node-telegram-bot-api';
+import { log } from './utils.js';
 
-const TELEGRAM_API = 'https://api.telegram.org';
-let telegramToken = null;
+let bot = null;
 
 /**
- * Initialize Telegram (store token for sendNotification).
+ * Initialize Telegram bot
+ * @param {string} token - Telegram bot token
+ * @param {string} managerChatId - Manager chat ID
  */
 export function initializeTelegram(token, managerChatId) {
   if (!token || !managerChatId) {
     log('Telegram not initialized: missing token or chat ID');
     return null;
   }
-  telegramToken = token.trim().replace(/^["']|["']$/g, '');
-  log(`Telegram bot initialized for chat ID: ${managerChatId}`);
-  return true;
+
+  try {
+    bot = new TelegramBot(token, { polling: false });
+    log(`Telegram bot initialized for chat ID: ${managerChatId}`);
+    return bot;
+  } catch (error) {
+    log(`Failed to initialize Telegram bot: ${error.message}`);
+    return null;
+  }
 }
 
 /**
- * Send a notification via Telegram Bot API (fetch only).
+ * Send a notification to the manager
+ * @param {string} message - Message to send
+ * @param {string} managerChatId - Manager chat ID
+ * @returns {Promise<boolean>}
  */
 export async function sendNotification(message, managerChatId) {
-  if (!telegramToken || !managerChatId) {
+  if (!bot || !managerChatId) {
     log('Telegram not available, message not sent: ' + message);
     return false;
   }
+
   try {
-    const url = `${TELEGRAM_API}/bot${telegramToken}/sendMessage`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: String(managerChatId).trim(),
-        text: message,
-        parse_mode: 'HTML',
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!data.ok) {
-      log(`Failed to send Telegram notification: ${data.description || res.status}`);
-      return false;
-    }
+    await bot.sendMessage(managerChatId, message, { parse_mode: 'HTML' });
     log('Telegram notification sent');
     return true;
   } catch (error) {
-    log(`Failed to send Telegram notification: ${formatErrorForLog(error)}`);
+    log(`Failed to send Telegram notification: ${error.message}`);
     return false;
   }
 }
@@ -137,41 +134,12 @@ export function formatBookingFailure(user, date, reason) {
 }
 
 /**
- * Format "monitor started" notification with pool and cache info
- */
-export function formatMonitorStarted(users, config, cacheStats) {
-  const providerCounts = {};
-  for (const u of users) {
-    const p = (u.provider || 'ais').toLowerCase();
-    providerCounts[p] = (providerCounts[p] || 0) + 1;
-  }
-  const providerLines = Object.entries(providerCounts)
-    .map(([p, n]) => `${p}: ${n} account(s)`)
-    .join(', ');
-  const cacheLines = Object.entries(cacheStats.providers || {}).length
-    ? Object.entries(cacheStats.providers)
-        .map(([p, s]) => `${p}: ${s.available}/${s.entries} available`)
-        .join('\n')
-    : 'No cache entries yet';
-  return `
-<b>🚀 Monitor started</b>
-
-<b>Accounts in pool:</b> ${users.length}
-<b>By provider:</b> ${providerLines}
-
-<b>Cache:</b> ${cacheStats.total} record(s)
-${cacheLines}
-
-<b>Settings:</b>
-Refresh: ${config.refreshInterval}s · Cache TTL: ${config.cacheTtl}s
-Sheets refresh: ${config.sheetsRefreshInterval}s · Rotation cooldown: ${config.rotationCooldown}s
-
-<b>Time:</b> ${new Date().toLocaleString()}
-  `.trim();
-}
-
-/**
  * Format notification for successful booking (with optional time slot detail)
+ * @param {Object} user - User object
+ * @param {string} oldDate - Previous appointment date
+ * @param {string} newDate - New appointment date
+ * @param {string} [timeSlot] - Optional time slot (e.g. "09:00")
+ * @returns {string}
  */
 export function formatBookingSuccessWithDetails(user, oldDate, newDate, timeSlot = null) {
   let msg = `
