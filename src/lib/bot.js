@@ -53,6 +53,10 @@ export class Bot {
     return earliestDate;
   }
 
+  /**
+   * Book appointment for the given date.
+   * @returns {Promise<{ success: boolean, time?: string }>} - success and time slot if booked
+   */
   async bookAppointment(sessionHeaders, date) {
     const time = await this.client.checkAvailableTime(
       sessionHeaders,
@@ -63,12 +67,12 @@ export class Bot {
 
     if (!time) {
       log(`no available time slots for date ${date}`);
-      return false;
+      return { success: false };
     }
 
     if (this.dryRun) {
       log(`[DRY RUN] Would book appointment at ${date} ${time} (not actually booking)`);
-      return true;
+      return { success: true, time };
     }
 
     await this.client.book(
@@ -80,7 +84,7 @@ export class Bot {
     );
 
     log(`booked time at ${date} ${time}`);
-    return true;
+    return { success: true, time };
   }
 
 }

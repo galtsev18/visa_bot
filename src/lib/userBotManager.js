@@ -16,7 +16,7 @@ import {
   updateUserPriority as updateUserPriorityInSheets,
   logBookingAttempt 
 } from './sheets.js';
-import { sendNotification, formatBookingSuccess, formatError } from './telegram.js';
+import { sendNotification, formatBookingSuccess, formatBookingSuccessWithDetails, formatSlotFound, formatBookingFailure } from './telegram.js';
 import { log, sleep } from './utils.js';
 import { getConfig } from './config.js';
 
@@ -144,10 +144,10 @@ export class UserBotManager {
 
     try {
       const oldDate = user.currentDate;
-      const booked = await bot.bookAppointment(sessionHeaders, date);
+      const result = await bot.bookAppointment(sessionHeaders, date);
 
-      if (booked) {
-        await this.handleBookingSuccess(user, oldDate, date);
+      if (result && result.success) {
+        await this.handleBookingSuccess(user, oldDate, date, result.time);
         return true;
       } else {
         await this.handleBookingFailure(user, date, 'Booking failed - no time slot available');
@@ -164,9 +164,10 @@ export class UserBotManager {
    * @param {User} user - User object
    * @param {string} oldDate - Previous appointment date
    * @param {string} newDate - New appointment date
+   * @param {string} [timeSlot] - Booked time slot (e.g. "09:00")
    */
-  async handleBookingSuccess(user, oldDate, newDate) {
-    log(`Booking successful for ${user.email}: ${oldDate} -> ${newDate}`);
+  async handleBookingSuccess(user, oldDate, newDate, timeSlot = null) {
+    log(`Booking successful for ${user.email}: ${oldDate} -> ${newDate}${timeSlot ? ` ${timeSlot}` : ''}`);
 
     // Update user
     user.currentDate = newDate;
@@ -186,8 +187,8 @@ export class UserBotManager {
       })
     ]);
 
-    // Send Telegram notification
-    const message = formatBookingSuccess(user, oldDate, newDate);
+    // Send Telegram notification with details (including time slot if available)
+    const message = formatBookingSuccessWithDetails(user, oldDate, newDate, timeSlot);
     await sendNotification(message, this.config.telegramManagerChatId);
   }
 
@@ -206,6 +207,10 @@ export class UserBotManager {
       result: 'failure',
       reason: reason
     });
+
+    // Send Telegram notification with details
+    const message = formatBookingFailure(user, date, reason);
+    await sendNotification(message, this.config.telegramManagerChatId);
   }
 
   /**
@@ -250,6 +255,9 @@ export class UserBotManager {
         const availableDate = await this.checkUserWithCache(user);
 
         if (availableDate) {
+          // Notify: matching slot found, attempting to book
+          const slotFoundMsg = formatSlotFound(user, availableDate);
+          await sendNotification(slotFoundMsg, this.config.telegramManagerChatId);
           // Attempt booking
           await this.attemptBooking(user, availableDate);
         } else {

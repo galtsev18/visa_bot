@@ -132,7 +132,7 @@ In the **Users** sheet, add rows for each user:
 
 | email | password | country_code | schedule_id | current_date | reaction_time | date_ranges | active |
 |--------|----------|-------------|--------------|--------------|---------------|--------------|-----------|
-| user@example.com | password123 | kz | 12345 | 2024-08-15 | 7 | [{"from":"June 1, 2024","to":"June 15, 2024"}] | TRUE |
+| user@example.com | password123 | kz | 12345 | 2024-08-15 | 7 | [{"from":"2024-06-01","to":"2024-06-15"}] | TRUE |
 
 **Field Descriptions:**
 - `email`: User's login email for ais.usvisa-info.com
@@ -196,7 +196,7 @@ When a booking is successful, you should receive a Telegram message to the chat 
 - Check sheet name is exactly "Users"
 
 ### Date parsing errors
-- Use human-readable dates: "June 1, 2024" not "2024-06-01"
+- Use digital format: "2024-06-01" (recommended) or human-readable: "June 1, 2024"
 - Ensure JSON is valid in date_ranges column
 - Check date format examples in this guide
 

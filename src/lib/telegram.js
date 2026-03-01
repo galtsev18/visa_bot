@@ -95,3 +95,64 @@ ${message}
 <b>Time:</b> ${new Date().toLocaleString()}
   `.trim();
 }
+
+/**
+ * Format notification when a matching time slot is found (before booking attempt)
+ * @param {Object} user - User object
+ * @param {string} date - Date that matches criteria (YYYY-MM-DD)
+ * @returns {string}
+ */
+export function formatSlotFound(user, date) {
+  return `
+<b>🔔 Matching Slot Found</b>
+
+<b>User:</b> ${user.email}
+<b>Current appointment:</b> ${user.currentDate || 'None'}
+<b>Found date:</b> ${date}
+<b>Criteria:</b> In range, after reaction time (${user.reactionTime} days)
+<b>Action:</b> Attempting to book...
+<b>Time:</b> ${new Date().toLocaleString()}
+  `.trim();
+}
+
+/**
+ * Format notification for failed booking attempt (with details)
+ * @param {Object} user - User object
+ * @param {string} date - Date that was attempted (YYYY-MM-DD)
+ * @param {string} reason - Failure reason
+ * @returns {string}
+ */
+export function formatBookingFailure(user, date, reason) {
+  return `
+<b>❌ Booking Attempt Failed</b>
+
+<b>User:</b> ${user.email}
+<b>Date attempted:</b> ${date}
+<b>Reason:</b> ${reason}
+<b>Time:</b> ${new Date().toLocaleString()}
+  `.trim();
+}
+
+/**
+ * Format notification for successful booking (with optional time slot detail)
+ * @param {Object} user - User object
+ * @param {string} oldDate - Previous appointment date
+ * @param {string} newDate - New appointment date
+ * @param {string} [timeSlot] - Optional time slot (e.g. "09:00")
+ * @returns {string}
+ */
+export function formatBookingSuccessWithDetails(user, oldDate, newDate, timeSlot = null) {
+  let msg = `
+<b>✅ Appointment Booked Successfully</b>
+
+<b>User:</b> ${user.email}
+<b>Previous Date:</b> ${oldDate || 'None'}
+<b>New Date:</b> ${newDate}`;
+  if (timeSlot) {
+    msg += `\n<b>Time slot:</b> ${timeSlot}`;
+  }
+  msg += `
+<b>Time:</b> ${new Date().toLocaleString()}
+  `.trim();
+  return msg;
+}

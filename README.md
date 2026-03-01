@@ -10,6 +10,10 @@ An automated bot that monitors and reschedules US visa interview appointments to
 - 🚨 Exits successfully when target date is reached
 - 📊 Detailed logging with timestamps
 - 🔐 Secure authentication with environment variables
+- 👥 **Multi-user support** - Monitor multiple users from Google Sheets
+- 📊 **Google Sheets integration** - Manage users and view logs in spreadsheets
+- 🔄 **Shared date cache** - Efficient date checking across users
+- 🔔 **Telegram notifications** - Get notified when appointments are booked
 
 ## How It Works
 
@@ -36,7 +40,32 @@ npm install
 
 ## Configuration
 
-Create a `.env` file in the project root with your credentials:
+### Multi-User Mode (Recommended)
+
+Create a `.env` file in the project root. See [QUICKSTART.md](QUICKSTART.md) or [SETUP.md](SETUP.md) for complete setup instructions.
+
+Required variables:
+```env
+GOOGLE_SHEETS_ID=your_spreadsheet_id
+GOOGLE_CREDENTIALS_PATH=./credentials.json
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_MANAGER_CHAT_ID=your_chat_id
+FACILITY_ID=134
+```
+
+Optional variables (with defaults):
+```env
+REFRESH_INTERVAL=3
+SHEETS_REFRESH_INTERVAL=300
+CACHE_TTL=60
+ROTATION_COOLDOWN=30
+```
+
+**Note:** For multi-user mode, user credentials (email, password, schedule_id, country_code) are stored in Google Sheets, not in `.env`.
+
+### Single-User Mode (Legacy)
+
+For backward compatibility, you can still use environment variables:
 
 ```env
 EMAIL=your.email@example.com
@@ -55,15 +84,31 @@ REFRESH_DELAY=3
 | `PASSWORD` | Your login password | Your credentials for ais.usvisa-info.com |
 | `COUNTRY_CODE` | Your country code | Found in URL: `https://ais.usvisa-info.com/en-{COUNTRY_CODE}/` <br>Examples: `br` (Brazil), `fr` (France), `de` (Germany) |
 | `SCHEDULE_ID` | Your appointment schedule ID | Found in URL when rescheduling: <br>`https://ais.usvisa-info.com/en-{COUNTRY_CODE}/niv/schedule/{SCHEDULE_ID}/continue_actions` |
-| `FACILITY_ID` | Your consulate facility ID | Found in network calls when selecting dates, or inspect the date selector dropdown <br>Example: Paris = `44` |
+| `FACILITY_ID` | Your consulate facility ID | Found in network calls when selecting dates, or inspect the date selector dropdown <br>Example: Paris = `44` <br>**Note:** For multi-user mode, this is hardcoded to `134` |
 | `REFRESH_DELAY` | Seconds between checks | Optional, defaults to 3 seconds |
 
 ## Usage
 
+### Multi-User Mode (Recommended)
+
+Monitor multiple users from Google Sheets:
+
+```bash
+# Test Google Sheets connection
+node src/index.js test-sheets
+
+# Start monitoring
+node src/index.js monitor
+```
+
+See [QUICKSTART.md](QUICKSTART.md) or [SETUP.md](SETUP.md) for detailed setup instructions.
+
+### Single-User Mode (Legacy)
+
 Run the bot with your current appointment date:
 
 ```bash
-node index.js -c <current_date> [-t <target_date>] [-m <min_date>]
+node src/index.js bot -c <current_date> [-t <target_date>] [-m <min_date>]
 ```
 
 ### Command Line Arguments
@@ -78,22 +123,41 @@ node index.js -c <current_date> [-t <target_date>] [-m <min_date>]
 
 ```bash
 # Basic usage - reschedule to any earlier date
-node index.js -c 2023-06-15
+node src/index.js bot -c 2024-06-15
 
 # With target date - stop when you get June 1st or earlier  
-node index.js -c 2023-06-15 -t 2023-06-01
+node src/index.js bot -c 2024-06-15 -t 2024-06-01
 
 # With minimum date - only accept dates after May 1st
-node index.js -c 2023-06-15 -m 2023-05-01
+node src/index.js bot -c 2024-06-15 -m 2024-05-01
 
-# With both constraints - only book between May 1st and June 1st
-node index.js -c 2023-06-15 -t 2023-06-01 -m 2023-05-01
+# Get Telegram chat ID
+node src/index.js get-chat-id
+
+# Test Google Sheets connection
+node src/index.js test-sheets
 
 # Get help
-node index.js --help
+node src/index.js --help
 ```
 
 ## How It Behaves
+
+### Multi-User Mode
+
+The bot will:
+1. **Load users** from Google Sheets
+2. **Rotate through users** to check for available dates
+3. **Use shared cache** to reduce API calls
+4. **Validate dates** against user-specific constraints:
+   - Must be earlier than current date
+   - Must be within user's date ranges
+   - Must be after (today + reaction_time) days
+5. **Book appointments** automatically when valid dates are found
+6. **Send notifications** via Telegram
+7. **Log all activity** to Google Sheets
+
+### Single-User Mode
 
 The bot will:
 1. **Log in** to your account using provided credentials
