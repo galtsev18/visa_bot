@@ -13,46 +13,69 @@ import { log, isSocketHangupError } from '../lib/utils.js';
 const COOLDOWN = 3600; // 1 hour in seconds
 
 export async function monitorCommand(options = {}) {
-  const config = getConfig();
-
-  // Only require .env vars needed to open the spreadsheet (Settings sheet may not exist yet)
-  validateEnvForSheets(config);
-
   try {
-    await initializeSheets(config.googleCredentialsPath, config.googleSheetsId);
-    log('Google Sheets initialized');
+    // Use composition root when available (e.g. running from dist)
+    let config;
+    let users;
+    let cacheEntries;
+    let compositionModule = null;
+    try {
+      compositionModule = await import('../composition/createMonitorContext.js');
+    } catch {
+      // Composition root only present when built (TS compiled to dist)
+    }
 
-    // Read Settings (creates Settings sheet + default rows if missing)
-    const sheetSettings = await readSettingsFromSheet();
-    delete sheetSettings.googleSheetsId;
-    delete sheetSettings.googleCredentialsPath;
-    Object.assign(config, sheetSettings);
+    if (compositionModule?.createMonitorContext) {
+      const ctx = await compositionModule.createMonitorContext({
+        refreshInterval: options.refreshInterval
+          ? Number(options.refreshInterval)
+          : undefined,
+        sheetsRefresh: options.sheetsRefresh
+          ? Number(options.sheetsRefresh)
+          : undefined,
+      });
+      config = ctx.config;
+      users = ctx.users;
+      cacheEntries = ctx.cacheEntries;
+      log('Monitor started via composition root (adapters).');
+    } else {
+      config = getConfig();
+      validateEnvForSheets(config);
+      await initializeSheets(config.googleCredentialsPath, config.googleSheetsId);
+      log('Google Sheets initialized');
 
-    // Now require full config (Telegram etc. from sheet or .env)
-    validateMultiUserConfig(config);
+      const sheetSettings = await readSettingsFromSheet();
+      delete sheetSettings.googleSheetsId;
+      delete sheetSettings.googleCredentialsPath;
+      Object.assign(config, sheetSettings);
+      validateMultiUserConfig(config);
 
-    if (options.refreshInterval) config.refreshInterval = Number(options.refreshInterval);
-    if (options.sheetsRefresh) config.sheetsRefreshInterval = Number(options.sheetsRefresh);
+      if (options.refreshInterval)
+        config.refreshInterval = Number(options.refreshInterval);
+      if (options.sheetsRefresh)
+        config.sheetsRefreshInterval = Number(options.sheetsRefresh);
+
+      initializeTelegram(config.telegramBotToken, config.telegramManagerChatId);
+      log('Telegram initialized');
+
+      setSheetsQuotaNotifier((event) => {
+        const msg =
+          event === 'exceeded'
+            ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
+            : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
+        sendNotification(msg, config.telegramManagerChatId);
+      });
+
+      const data = await getInitialData();
+      users = data.users;
+      cacheEntries = data.cacheEntries;
+    }
 
     log('Initializing multi-user monitoring system...');
     log(`Refresh interval: ${config.refreshInterval}s`);
     log(`Sheets refresh interval: ${config.sheetsRefreshInterval}s`);
     log(`Cache TTL: ${config.cacheTtl}s`);
     log(`Rotation cooldown: ${config.rotationCooldown}s`);
-
-    initializeTelegram(config.telegramBotToken, config.telegramManagerChatId);
-    log('Telegram initialized');
-
-    setSheetsQuotaNotifier((event) => {
-      const msg =
-        event === 'exceeded'
-          ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
-          : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
-      sendNotification(msg, config.telegramManagerChatId);
-    });
-
-    // Single batch read: users + cache (1 read instead of 2)
-    const { users, cacheEntries } = await getInitialData();
 
     if (users.length === 0) {
       log('No active users found in Google Sheets');

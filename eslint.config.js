@@ -25,5 +25,5 @@ export default tseslint.config(
       '@typescript-eslint/no-require-imports': 'off',
     },
   },
-  { ignores: ['dist/**', 'node_modules/**', '*.config.js'] }
+  { ignores: ['dist/**', 'node_modules/**'] }
 );
