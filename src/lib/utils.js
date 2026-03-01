@@ -1,11 +1,14 @@
+import { logger } from './logger.js';
+
 export function sleep(seconds) {
   return new Promise((resolve) => {
     setTimeout(resolve, seconds * 1000);
   });
 }
 
+/** @deprecated Use logger.info() or logger.error() from './logger.js'. Kept for compatibility. */
 export function log(message) {
-  console.log(`[${new Date().toISOString()}]`, message);
+  logger.info(message);
 }
 
 export function isSocketHangupError(err) {

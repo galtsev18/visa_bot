@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { program } from 'commander';
+import { logger } from './lib/logger.js';
 import { formatErrorForLog } from './lib/utils.js';
 import { botCommand } from './commands/bot.js';
 import { monitorCommand } from './commands/monitor.js';
@@ -10,7 +11,7 @@ import { testVfsCaptchaCommand } from './commands/test-vfs-captcha.js';
 
 // CLI boundary: avoid raw stack dumps for unhandled rejections
 process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled rejection:', formatErrorForLog(reason));
+  logger.error({ err: reason }, `Unhandled rejection: ${formatErrorForLog(reason)}`);
   process.exit(1);
 });
 
@@ -65,6 +66,6 @@ program
   .action(botCommand);
 
 program.parseAsync().catch((err) => {
-  console.error('Command failed:', formatErrorForLog(err));
+  logger.error({ err }, `Command failed: ${formatErrorForLog(err)}`);
   process.exit(1);
 });

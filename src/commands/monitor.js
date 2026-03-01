@@ -7,6 +7,7 @@ import {
 } from '../lib/sheets.js';
 import { initializeTelegram, sendNotification } from '../lib/telegram.js';
 import { UserBotManager } from '../lib/userBotManager.js';
+import { logger } from '../lib/logger.js';
 import { log, isSocketHangupError, formatErrorForLog } from '../lib/utils.js';
 
 const COOLDOWN = 3600; // 1 hour in seconds
@@ -110,8 +111,10 @@ export async function monitorCommand(options = {}) {
       await new Promise((resolve) => setTimeout(resolve, COOLDOWN * 1000));
       return monitorCommand(options);
     } else {
-      log(`Error: ${errMsg}`);
-      if (err?.stack) log(err.stack);
+      logger.error({ err }, `Error: ${errMsg}`);
+      if (process.env.NODE_ENV !== 'production' && err?.stack) {
+        logger.debug({ stack: err.stack }, 'Stack trace');
+      }
       process.exit(1);
     }
   }
