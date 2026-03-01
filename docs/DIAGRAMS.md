@@ -131,9 +131,9 @@ flowchart LR
     end
 
     subgraph Process
-        P1[Composition Root<br/>или Fallback]
+        P1[Composition Root<br>или Fallback]
         P2[UserBotManager]
-        P3[Check User<br/>+ Cache]
+        P3[Check User<br>+ Cache]
         P4[Attempt Booking]
     end
 
@@ -165,13 +165,13 @@ DFD Level 1 — монитор, один цикл по пользователю:
 ```mermaid
 flowchart TB
     subgraph Sources
-        S1[Google Sheets<br/>Users, Settings]
+        S1[Google Sheets<br>Users, Settings]
         S2[Available Dates Cache]
     end
 
     subgraph "Monitor Process"
         A[Load users & config]
-        B[Select next user<br/>rotation]
+        B[Select next user<br>rotation]
         C[Refresh cache if stale]
         D[Get available dates]
         E[Filter by user validity]
@@ -181,7 +181,7 @@ flowchart TB
     end
 
     subgraph Sinks
-        T1[Google Sheets<br/>Updates, Logs]
+        T1[Google Sheets<br>Updates, Logs]
         T2[Telegram]
         T3[AIS/VFS API]
     end
