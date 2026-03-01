@@ -2,9 +2,9 @@ import { Bot } from './bot.js';
 import { getNextUser, updateUserPriority } from './userRotation.js';
 import {
   getAvailableDates,
-  isDateAvailable,
   isCacheStale,
   refreshAllDates,
+  isDateAvailable,
   initializeCache,
   getCacheStats,
 } from './dateCache.js';
@@ -25,6 +25,8 @@ import {
   formatMonitorStarted,
 } from './telegram.js';
 import { log, sleep, formatErrorForLog } from './utils.js';
+import { checkUserWithCache as checkUserWithCacheUseCase } from '../application/checkUserWithCache.js';
+import { attemptBooking as attemptBookingUseCase } from '../application/attemptBooking.js';
 
 export class UserBotManager {
   constructor(config) {
@@ -103,68 +105,16 @@ export class UserBotManager {
    * @returns {Promise<string|null>} - Available date or null
    */
   async checkUserWithCache(user) {
-    const bot = this.bots.get(user.email);
-    const sessionHeaders = this.sessions.get(user.email);
-
-    if (!bot || !sessionHeaders) {
-      const parts = [];
-      if (!bot) parts.push('bot not initialized');
-      if (!sessionHeaders) parts.push('session not initialized (not logged in)');
-      log(
-        `User ${user.email}: ${parts.join(', ')} — skipping date check (login may have failed at startup)`
-      );
-      return null;
-    }
-
-    // Check if cache needs refresh
-    const provider = user.provider || 'ais';
-    const availableDates = getAvailableDates(provider);
-
-    if (
-      availableDates.length === 0 ||
-      availableDates.some((date) => isCacheStale(date, this.config.cacheTtl, provider))
-    ) {
-      log(`Refreshing date cache for user ${user.email} (${provider})...`);
-      try {
-        await refreshAllDates(
-          bot.client,
-          sessionHeaders,
-          user.scheduleId,
-          this.config.facilityId,
-          this.config.cacheTtl,
-          provider,
-          {
-            requestDelaySec: this.config.aisRequestDelaySec,
-            rateLimitBackoffSec: this.config.aisRateLimitBackoffSec,
-          }
-        );
-        const refreshedDates = getAvailableDates(provider);
-        availableDates.length = 0;
-        availableDates.push(...refreshedDates);
-      } catch (error) {
-        log(`Failed to refresh cache: ${error.message}`);
-      }
-    }
-
-    // Filter dates for this user
-    const validDates = availableDates.filter((date) => {
-      if (!user.isDateValid(date)) {
-        return false;
-      }
-      return isDateAvailable(date, provider);
+    return checkUserWithCacheUseCase(user, {
+      bot: this.bots.get(user.email),
+      sessionHeaders: this.sessions.get(user.email),
+      config: this.config,
+      getAvailableDates,
+      isCacheStale,
+      refreshAllDates,
+      isDateAvailable,
+      log,
     });
-
-    if (validDates.length === 0) {
-      log(`No valid dates found for user ${user.email}`);
-      return null;
-    }
-
-    // Return earliest valid date
-    validDates.sort();
-    const selectedDate = validDates[0];
-    log(`Found valid date ${selectedDate} for user ${user.email}`);
-
-    return selectedDate;
   }
 
   /**
@@ -174,97 +124,18 @@ export class UserBotManager {
    * @returns {Promise<boolean>}
    */
   async attemptBooking(user, date) {
-    const bot = this.bots.get(user.email);
-    const sessionHeaders = this.sessions.get(user.email);
-
-    if (!bot || !sessionHeaders) {
-      const parts = [];
-      if (!bot) parts.push('bot not initialized');
-      if (!sessionHeaders) parts.push('session not initialized (not logged in)');
-      const reason = `Cannot book: ${parts.join(', ')} for ${user.email} (login may have failed at startup)`;
-      await logBookingAttempt({
-        user_email: user.email,
-        date_attempted: date,
-        result: 'failure',
-        reason,
-      });
-      log(`User ${user.email}: ${reason}`);
-      return false;
-    }
-
-    try {
-      const oldDate = user.currentDate;
-      const result = await bot.bookAppointment(sessionHeaders, date);
-
-      if (result && result.success) {
-        await this.handleBookingSuccess(user, oldDate, date, result.time);
-        return true;
-      } else {
-        await this.handleBookingFailure(user, date, 'Booking failed - no time slot available');
-        return false;
-      }
-    } catch (error) {
-      await this.handleBookingFailure(user, date, error.message);
-      return false;
-    }
-  }
-
-  /**
-   * Handle successful booking
-   * @param {User} user - User object
-   * @param {string} oldDate - Previous appointment date
-   * @param {string} newDate - New appointment date
-   * @param {string} [timeSlot] - Booked time slot (e.g. "09:00")
-   */
-  async handleBookingSuccess(user, oldDate, newDate, timeSlot = null) {
-    log(
-      `Booking successful for ${user.email}: ${oldDate} -> ${newDate}${timeSlot ? ` ${timeSlot}` : ''}`
-    );
-
-    // Update user
-    user.currentDate = newDate;
-    user.lastBooked = newDate;
-
-    // Update in Sheets (with time so spreadsheet shows date and time)
-    await Promise.all([
-      updateUserCurrentDate(user.email, newDate, timeSlot, user.rowIndex),
-      updateUserLastBooked(user.email, newDate, timeSlot, user.rowIndex),
-      logBookingAttempt({
-        user_email: user.email,
-        date_attempted: newDate,
-        time_attempted: timeSlot,
-        result: 'success',
-        reason: 'Appointment booked successfully',
-        old_date: oldDate,
-        new_date: newDate,
-        new_time: timeSlot,
-      }),
-    ]);
-
-    // Send Telegram notification with details (including time slot if available)
-    const message = formatBookingSuccessWithDetails(user, oldDate, newDate, timeSlot);
-    await sendNotification(message, this.config.telegramManagerChatId);
-  }
-
-  /**
-   * Handle booking failure
-   * @param {User} user - User object
-   * @param {string} date - Date that was attempted
-   * @param {string} reason - Failure reason
-   */
-  async handleBookingFailure(user, date, reason) {
-    log(`Booking failed for ${user.email} on ${date}: ${reason}`);
-
-    await logBookingAttempt({
-      user_email: user.email,
-      date_attempted: date,
-      result: 'failure',
-      reason: reason,
+    return attemptBookingUseCase(user, date, {
+      bot: this.bots.get(user.email),
+      sessionHeaders: this.sessions.get(user.email),
+      config: this.config,
+      updateUserCurrentDate,
+      updateUserLastBooked,
+      logBookingAttempt,
+      sendNotification,
+      formatBookingSuccessWithDetails,
+      formatBookingFailure,
+      log,
     });
-
-    // Send Telegram notification with details
-    const message = formatBookingFailure(user, date, reason);
-    await sendNotification(message, this.config.telegramManagerChatId);
   }
 
   /**
