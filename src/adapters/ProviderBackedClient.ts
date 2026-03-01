@@ -2,7 +2,9 @@ import type { VisaProvider, VisaCredentials, ProviderSession } from '../ports/Vi
 
 /**
  * Client-shaped wrapper around VisaProvider for use with existing Bot.
- * Bot expects: login() -> session, checkAvailableDate(session, ...), checkAvailableTime(session, ...), book(session, ...).
+ * Session is stored after login() and used by checkAvailableDate, checkAvailableTime, and book
+ * when the caller does not pass headers. Callers may pass headers for compatibility (e.g. same
+ * interface as VisaHttpClient); if omitted or undefined, the stored session is used.
  */
 export class ProviderBackedClient {
   private session: ProviderSession | null = null;
@@ -17,30 +19,41 @@ export class ProviderBackedClient {
     return this.session;
   }
 
+  private requireSession(headers: ProviderSession | null | undefined): ProviderSession {
+    const session = headers ?? this.session;
+    if (session == null) {
+      throw new Error('ProviderBackedClient: not logged in and no session provided. Call login() first.');
+    }
+    return session;
+  }
+
   async checkAvailableDate(
-    headers: ProviderSession,
+    headers: ProviderSession | null | undefined,
     scheduleId: string,
     facilityId: number
   ): Promise<string[]> {
-    return this.provider.getAvailableDates(headers, scheduleId, facilityId);
+    const session = this.requireSession(headers);
+    return this.provider.getAvailableDates(session, scheduleId, facilityId);
   }
 
   async checkAvailableTime(
-    headers: ProviderSession,
+    headers: ProviderSession | null | undefined,
     scheduleId: string,
     facilityId: number,
     date: string
   ): Promise<string | null | undefined> {
-    return this.provider.getAvailableTime(headers, scheduleId, facilityId, date);
+    const session = this.requireSession(headers);
+    return this.provider.getAvailableTime(session, scheduleId, facilityId, date);
   }
 
   async book(
-    headers: ProviderSession,
+    headers: ProviderSession | null | undefined,
     scheduleId: string,
     facilityId: number,
     date: string,
     time: string
   ): Promise<void> {
-    await this.provider.book(headers, scheduleId, facilityId, date, time);
+    const session = this.requireSession(headers);
+    await this.provider.book(session, scheduleId, facilityId, date, time);
   }
 }

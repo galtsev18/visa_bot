@@ -50,6 +50,18 @@ export interface DateCache {
     cache_valid_until?: string;
   }>): Promise<void>;
 
+  /**
+   * Update a single cache entry (in-memory + persist to storage when applicable).
+   * Matches lib/dateCache.updateDate capability.
+   */
+  updateDate(
+    date: string,
+    available: boolean,
+    times?: string[],
+    ttlSeconds?: number,
+    provider?: string
+  ): void;
+
   refreshAllDates(
     client: DateCacheClient,
     sessionHeaders: Record<string, unknown>,

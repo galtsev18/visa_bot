@@ -36,6 +36,16 @@ export class DateCacheAdapter implements DateCache {
     return dateCacheLib.getCacheStats();
   }
 
+  updateDate(
+    date: string,
+    available: boolean,
+    times?: string[],
+    ttlSeconds?: number,
+    provider?: string
+  ): void {
+    dateCacheLib.updateDate(date, available, times ?? [], ttlSeconds ?? 60, provider ?? 'ais');
+  }
+
   async refreshAllDates(
     client: DateCacheClient,
     sessionHeaders: Record<string, unknown>,

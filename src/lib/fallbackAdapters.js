@@ -38,6 +38,8 @@ export function createFallbackAdapters() {
       dateCache.isCacheStale(date, ttlSeconds, provider ?? 'ais'),
     getCacheStats: () => dateCache.getCacheStats(),
     initialize: (preloadedEntries) => dateCache.initializeCache(preloadedEntries ?? []),
+    updateDate: (date, available, times, ttlSeconds, provider) =>
+      dateCache.updateDate(date, available, times ?? [], ttlSeconds ?? 60, provider ?? 'ais'),
     refreshAllDates: (client, sessionHeaders, scheduleId, facilityId, ttlSeconds, provider, options) =>
       dateCache.refreshAllDates(
         client,
