@@ -32,8 +32,6 @@ C4Context
     Rel(visabot, ais, "Слоты, букинг")
     Rel(visabot, vfs, "Слоты (опц.)")
     Rel(visabot, user, "Уведомления")
-
-    UpdateLayoutConfig(3, 2)
 ```
 
 ### 1.2 Level 2 — Container (Контейнеры)
