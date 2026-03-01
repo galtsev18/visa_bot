@@ -3,7 +3,9 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
@@ -19,14 +21,18 @@
     "noEmit": false,
     "isolatedModules": true
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist",
-    "src/lib/logger.js",
-    "src/application/startMonitor.js",
-    "src/application/checkUserWithCache.js",
     "src/application/attemptBooking.js",
-    "src/composition/createMonitorContext.js"
+    "src/application/checkUserWithCache.js",
+    "src/application/startMonitor.js",
+    "src/composition/createMonitorContext.js",
+    "src/lib/dateParser.js",
+    "src/lib/logger.js",
+    "src/lib/utils.js"
   ]
 }

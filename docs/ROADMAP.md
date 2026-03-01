@@ -58,7 +58,8 @@
 ### 8. Типизация lib и commands — в работе
 
 - **План:** постепенная миграция `lib/` и `commands/` на TypeScript.
-- **Сделано:** перенесён `lib/logger` (logger.ts + реэкспорт logger.js). Остальные модули lib/commands — по мере возможности.
+- **Сделано:** перенесены `lib/logger`, `lib/utils`, `lib/dateParser` (каждый: .ts + реэкспорт .js). Остальные модули lib/commands — по мере возможности.
+- **Правило сборки:** реэкспортные `.js` (с парным `.ts`) не должны компилироваться — иначе ошибка «overwritten by multiple input files». Список `exclude` в `tsconfig.json` обновляется автоматически скриптом `scripts/update-ts-exclude.js` (запускается перед `npm run build` и `npm run typecheck`). При миграции нового модуля на TS достаточно добавить парный реэкспорт `.js` — вручную в exclude ничего добавлять не нужно. **После завершения миграции JS→TS** скрипт можно удалить, из package.json убрать его вызов из `build` и `typecheck`, а в tsconfig оставить `exclude`: `["node_modules", "dist"]`.
 - **Связано:** TECH_DEBT § 1 (типизация); ADR 0002.
 
 ### 9. Неиспользуемый код — частично выполнено
@@ -78,5 +79,5 @@
 - [x] В ARCHITECTURE и README описан рекомендуемый способ запуска и необходимость сборки для VFS
 - [x] В TESTING.md добавлен сценарий интеграционного теста monitor с моками портов
 - [x] В ARCHITECTURE описано поведение при перезапуске и границы многопроцессного запуска
-- [ ] Миграция lib/commands на TypeScript (по мере возможности); начато: lib/logger
+- [ ] Миграция lib/commands на TypeScript (по мере возможности); начато: lib/logger, lib/utils, lib/dateParser
 - [x] Решение по composition/index.ts (удалён) и неэкспортируемым функциям dateCache (префикс _)
