@@ -24,7 +24,7 @@
 src/
 ├── index.js                    # CLI: команды и роутинг
 ├── commands/
-│   ├── monitor.js              # Multi-user: composition root или fallback → UserBotManager
+│   ├── monitor.js              # Multi-user: только composition root → UserBotManager (deps обязательны)
 │   ├── bot.js                  # Single-user (legacy)
 │   ├── health.js               # Метрики и проверка работы
 │   ├── get-chat-id.js
@@ -32,6 +32,7 @@ src/
 │   └── test-vfs-captcha.js
 ├── composition/
 │   ├── createMonitorContext.ts # Composition root: адаптеры + конфиг для monitor
+│   ├── createMonitorContext.js # Реэкспорт из .ts (запуск из src через tsx)
 │   └── index.ts                # Barrel (не используется при импорте)
 ├── application/                # Use cases (TypeScript)
 │   ├── startMonitor.ts
@@ -62,7 +63,7 @@ src/
     ├── bot.js, client.js              # Один бот и AIS HTTP
     ├── dateCache.js, dateParser.js
     ├── sheets.js, telegram.js
-    ├── fallbackAdapters.js            # Адаптеры поверх lib при запуске без composition root
+    ├── fallbackAdapters.js            # Не используется командой monitor (оставлен для возможных утилит)
     ├── metrics.js                     # Метрики для health
     ├── captcha.js, browserCloudflare.js
     └── providers/
@@ -80,6 +81,8 @@ src/
 | Сборка | `npm run build` | tsc → `dist/`. |
 
 Исходники в `src` не импортируют из `dist`.
+
+**Рекомендуемый запуск:** для разработки — `npm run dev` (tsx загружает composition root из src); для продакшена и VFS — `npm run build && npm start` (сборка в `dist/`). Команда `monitor` всегда инициализируется через composition root; UserBotManager получает обязательные зависимости (repo, dateCache, notifications) из него.
 
 ---
 

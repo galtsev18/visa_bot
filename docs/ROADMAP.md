@@ -6,17 +6,17 @@
 
 ## Высокий приоритет
 
-### 1. Один путь запуска monitor (только composition root)
+### 1. Один путь запуска monitor (только composition root) — выполнено
 
-- **Проблема:** при `npm run dev` (src) и `npm start` (dist) разное поведение: fallback инициализирует lib напрямую, без портов; логика в `monitor.js` дублируется (Telegram, квоты, конфиг).
-- **План:** считать composition root единственным путём для команды `monitor`. Запуск из src — через тот же composition root (например, tsx для `createMonitorContext.ts`). Fallback либо удалить, либо оставить только как явный «legacy-режим без сборки» с пометкой в документации.
-- **Связано:** TECH_DEBT § 1 (смешение слоёв при отсутствии deps).
+- **Проблема:** при `npm run dev` (src) и `npm start` (dist) разное поведение: fallback инициализировал lib напрямую, без портов.
+- **Сделано:** команда `monitor` всегда вызывает `createMonitorContext`; добавлен реэкспорт `composition/createMonitorContext.js` из `.ts` для запуска из src через tsx. Fallback удалён.
+- **Связано:** TECH_DEBT § 1 (смешение слоёв).
 
-### 2. Обязательные deps в UserBotManager
+### 2. Обязательные deps в UserBotManager — выполнено
 
-- **Проблема:** UserBotManager принимает опциональные `deps`; при их отсутствии вызывает lib/sheets, lib/dateCache, lib/telegram напрямую — два контура в одном классе, сложнее тесты и рефакторинг.
-- **План:** сделать зависимости обязательными: UserBotManager всегда получает `repo`, `dateCache`, `notifications` из composition root. Fallback тогда реализуется только на уровне точки входа (если сохраняется), а не внутри менеджера.
-- **Связано:** п. 1 (один путь запуска); CONTRACTS.md, тесты с моками портов.
+- **Проблема:** UserBotManager принимал опциональные `deps` и при их отсутствии вызывал lib напрямую — два контура в одном классе.
+- **Сделано:** зависимости обязательны; при отсутствии `repo`, `dateCache` или `notifications` конструктор выбрасывает ошибку. Все ветки с прямым использованием lib удалены из UserBotManager.
+- **Связано:** CONTRACTS.md, тесты с моками портов.
 
 ---
 
@@ -70,8 +70,8 @@
 
 ## Чек-лист реализации планов
 
-- [ ] Один путь запуска monitor (composition root; fallback удалён или явно legacy)
-- [ ] UserBotManager принимает только обязательные deps (repo, dateCache, notifications)
+- [x] Один путь запуска monitor (composition root; fallback удалён)
+- [x] UserBotManager принимает только обязательные deps (repo, dateCache, notifications)
 - [ ] Устранение глобального состояния в lib (инстанцируемые фасады, DI из composition root)
 - [ ] ConfigProvider возвращает объединённый AppConfig (env + Settings)
 - [ ] В ARCHITECTURE и README описан рекомендуемый способ запуска и необходимость сборки для VFS

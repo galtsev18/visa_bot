@@ -89,16 +89,21 @@ REFRESH_DELAY=3
 
 ## Usage
 
+**Запуск:** для разработки — `npm run dev` (запуск из `src` через tsx); для продакшена и провайдера VFS Global — `npm run build && npm start` (сборка в `dist/`). Команда `monitor` всегда использует composition root (адаптеры портов).
+
 ### Multi-User Mode (Recommended)
 
 Monitor multiple users from Google Sheets:
 
 ```bash
 # Test Google Sheets connection
-node src/index.js test-sheets
+npm run dev -- test-sheets
 
-# Start monitoring
-node src/index.js monitor
+# Start monitoring (dev)
+npm run dev -- monitor
+
+# Production (and VFS support)
+npm run build && npm start monitor
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) or [SETUP.md](SETUP.md) for detailed setup instructions.

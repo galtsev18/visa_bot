@@ -10,7 +10,7 @@
 
 ## Decision
 
-Вводим слой **портов** (интерфейсы в `src/ports/`) и **адаптеров** (реализации в `src/adapters/` и при fallback в `src/lib/`). Use cases (application) зависят только от портов: UserRepository, DateCache, ConfigProvider, NotificationSender, VisaProvider. Конкретные реализации (Sheets, Telegram, AIS, VFS) создаются в **composition root** (`composition/createMonitorContext.ts`) и передаются в UserBotManager и use cases через зависимости. Команда `monitor` при запуске из `dist` использует composition root; при запуске из `src` — fallback-адаптеры поверх lib.
+Вводим слой **портов** (интерфейсы в `src/ports/`) и **адаптеров** (реализации в `src/adapters/` и при fallback в `src/lib/`). Use cases (application) зависят только от портов: UserRepository, DateCache, ConfigProvider, NotificationSender, VisaProvider. Конкретные реализации (Sheets, Telegram, AIS, VFS) создаются в **composition root** (`composition/createMonitorContext.ts`) и передаются в UserBotManager и use cases через зависимости. Команда `monitor` всегда использует composition root (из src — через реэкспорт createMonitorContext.js и tsx; из dist — скомпилированный модуль). UserBotManager получает обязательные deps (repo, dateCache, notifications) из composition root.
 
 ## Consequences
 
@@ -22,7 +22,7 @@
 
 ### Отрицательные / риски
 
-- Два пути инициализации (composition root vs fallback) усложняют код точки входа; часть lib остаётся с глобальным состоянием (см. TECH_DEBT, ROADMAP).
+- Часть lib остаётся с глобальным состоянием (см. TECH_DEBT, ROADMAP); уведомления о квотах Sheets по-прежнему используют глобальные initializeTelegram/setSheetsQuotaNotifier.
 
 ### Нейтральные
 
