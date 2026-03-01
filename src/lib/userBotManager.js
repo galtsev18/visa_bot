@@ -28,6 +28,7 @@ import { log, sleep, formatErrorForLog } from './utils.js';
 import { checkUserWithCache as checkUserWithCacheUseCase } from '../application/checkUserWithCache.js';
 import { attemptBooking as attemptBookingUseCase } from '../application/attemptBooking.js';
 import { startMonitor as startMonitorUseCase } from '../application/startMonitor.js';
+import { startMetrics, incrementChecks, incrementBookings } from './metrics.js';
 
 /**
  * Optional dependencies (ports). When provided (e.g. from composition root),
@@ -198,6 +199,8 @@ export class UserBotManager {
       config: this.config,
     });
 
+    startMetrics();
+
     while (true) {
       try {
         // Refresh users from storage periodically
@@ -245,11 +248,13 @@ export class UserBotManager {
         log(`Checking user ${user.email}...`);
 
         const availableDate = await this.checkUserWithCache(user);
+        incrementChecks();
 
         if (availableDate) {
           const slotFoundMsg = formatSlotFound(user, availableDate);
           await sendNotif(slotFoundMsg);
-          await this.attemptBooking(user, availableDate);
+          const booked = await this.attemptBooking(user, availableDate);
+          if (booked) incrementBookings();
         } else {
           const logAttempt = repo
             ? (a) => repo.logBookingAttempt(a)

@@ -198,7 +198,7 @@ src/
 - Домен (User, userRotation) без импортов из адаптеров. Юнит-тесты домена (Node.js `node:test`).
 
 **Фаза 5 (выполнена)**  
-- Логирование (pino, `LOG_LEVEL`); обработка ошибок на границе CLI; health-команда `node src/index.js health` (п.15, без метрик).
+- Логирование (pino, `LOG_LEVEL`); обработка ошибок на границе CLI; health-команда и метрики (checksTotal, bookingsTotal в файле, вывод в health).
 
 ### 4.2 Фаза 0: Подготовка
 
@@ -231,7 +231,7 @@ src/
 
 13. **Логирование (выполнено):** pino, уровни через `LOG_LEVEL`, `log()` → `logger.info()`.
 14. **Обработка ошибок (выполнено):** `formatErrorForLog`, на границе CLI — `logger.error({ err }, msg)`, без сырого stack в production.
-15. **Health (выполнено):** команда `health` — JSON `{ status, ts }`, exit 0. Метрики (проверки, букинги в час) — в заделе.
+15. **Health и метрики (выполнено):** команда `health` — JSON `{ status, ts }`, при наличии файла метрик — `metrics: { startedAt, checksTotal, bookingsTotal, lastCheckAt, lastBookingAt }`. Метрики пишутся в `.us-visa-bot-metrics.json` (или `METRICS_FILE`); счётчики обновляются в цикле monitor (checks — за каждую проверку юзера, bookings — за успешный букинг).
 
 ---
 
