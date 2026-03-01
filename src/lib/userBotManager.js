@@ -27,6 +27,7 @@ import {
 import { log, sleep, formatErrorForLog } from './utils.js';
 import { checkUserWithCache as checkUserWithCacheUseCase } from '../application/checkUserWithCache.js';
 import { attemptBooking as attemptBookingUseCase } from '../application/attemptBooking.js';
+import { startMonitor as startMonitorUseCase } from '../application/startMonitor.js';
 
 export class UserBotManager {
   constructor(config) {
@@ -145,12 +146,14 @@ export class UserBotManager {
   async monitorWithRotation(initialCacheEntries) {
     log('Starting monitoring loop with rotation...');
 
-    await initializeCache(initialCacheEntries);
-
-    // Notify manager that monitor started (pool size, cache stats, settings)
-    const cacheStats = getCacheStats();
-    const startedMsg = formatMonitorStarted(this.users, this.config, cacheStats);
-    await sendNotification(startedMsg, this.config.telegramManagerChatId);
+    await startMonitorUseCase(initialCacheEntries, {
+      initializeCache,
+      getCacheStats,
+      formatMonitorStarted,
+      sendNotification,
+      users: this.users,
+      config: this.config,
+    });
 
     while (true) {
       try {
