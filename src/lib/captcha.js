@@ -13,7 +13,7 @@ export async function solveImageCaptcha(imageBase64, options = {}) {
   if (!apiKey) {
     throw new Error(
       'Captcha solving requires CAPTCHA_2CAPTCHA_API_KEY. ' +
-      'Get a key at https://2captcha.com and add it to .env, or use manual captcha (see docs).'
+        'Get a key at https://2captcha.com and add it to .env, or use manual captcha (see docs).'
     );
   }
 
@@ -25,8 +25,8 @@ export async function solveImageCaptcha(imageBase64, options = {}) {
       key: apiKey,
       method: 'base64',
       body: base64Data,
-      json: '1'
-    })
+      json: '1',
+    }),
   });
   const data = await response.json();
   if (data.status !== 1 || !data.request) {
@@ -36,7 +36,7 @@ export async function solveImageCaptcha(imageBase64, options = {}) {
   const taskId = data.request;
   const maxAttempts = 24;
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, 5000));
     const res = await fetch(
       `https://2captcha.com/res.php?key=${apiKey}&action=get&id=${taskId}&json=1`
     );
@@ -64,7 +64,7 @@ export async function solveRecaptchaV2(siteKey, pageUrl, options = {}) {
   if (!apiKey) {
     throw new Error(
       'reCAPTCHA solving requires CAPTCHA_2CAPTCHA_API_KEY. ' +
-      'Add it to .env or use manual captcha.'
+        'Add it to .env or use manual captcha.'
     );
   }
 
@@ -76,8 +76,8 @@ export async function solveRecaptchaV2(siteKey, pageUrl, options = {}) {
       method: 'userrecaptcha',
       googlekey: siteKey,
       pageurl: pageUrl,
-      json: '1'
-    })
+      json: '1',
+    }),
   });
   const data = await response.json();
   if (data.status !== 1 || !data.request) {
@@ -87,7 +87,7 @@ export async function solveRecaptchaV2(siteKey, pageUrl, options = {}) {
   const taskId = data.request;
   const maxAttempts = 24;
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, 5000));
     const res = await fetch(
       `https://2captcha.com/res.php?key=${apiKey}&action=get&id=${taskId}&json=1`
     );
@@ -118,7 +118,7 @@ export async function solveTurnstile(siteKey, pageUrl, options = {}) {
   if (!apiKey) {
     throw new Error(
       'Turnstile solving requires CAPTCHA_2CAPTCHA_API_KEY. ' +
-      'Add it to .env (see https://2captcha.com).'
+        'Add it to .env (see https://2captcha.com).'
     );
   }
 
@@ -130,9 +130,9 @@ export async function solveTurnstile(siteKey, pageUrl, options = {}) {
       task: {
         type: 'TurnstileTaskProxyless',
         websiteURL: pageUrl,
-        websiteKey: siteKey
-      }
-    })
+        websiteKey: siteKey,
+      },
+    }),
   });
   const createData = await createRes.json();
   if (createData.errorId !== 0 || !createData.taskId) {
@@ -144,11 +144,11 @@ export async function solveTurnstile(siteKey, pageUrl, options = {}) {
   const taskId = createData.taskId;
   const maxAttempts = 24;
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, 5000));
     const resultRes = await fetch(`${API2CAPTCHA_BASE}/getTaskResult`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientKey: apiKey, taskId })
+      body: JSON.stringify({ clientKey: apiKey, taskId }),
     });
     const resultData = await resultRes.json();
     if (resultData.errorId !== 0) {
@@ -185,7 +185,7 @@ export async function solveTurnstileChallengePage(params, options = {}) {
   const task = {
     type: 'TurnstileTaskProxyless',
     websiteURL: params.pageurl,
-    websiteKey: params.sitekey
+    websiteKey: params.sitekey,
   };
   if (params.action) task.action = params.action;
   if (params.data) task.data = params.data;
@@ -194,7 +194,7 @@ export async function solveTurnstileChallengePage(params, options = {}) {
   const createRes = await fetch(`${API2CAPTCHA_BASE}/createTask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clientKey: apiKey, task })
+    body: JSON.stringify({ clientKey: apiKey, task }),
   });
   const createData = await createRes.json();
   if (createData.errorId !== 0 || !createData.taskId) {
@@ -206,11 +206,11 @@ export async function solveTurnstileChallengePage(params, options = {}) {
   const taskId = createData.taskId;
   const maxAttempts = 24;
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, 5000));
     const resultRes = await fetch(`${API2CAPTCHA_BASE}/getTaskResult`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientKey: apiKey, taskId })
+      body: JSON.stringify({ clientKey: apiKey, taskId }),
     });
     const resultData = await resultRes.json();
     if (resultData.errorId !== 0) {
@@ -221,7 +221,7 @@ export async function solveTurnstileChallengePage(params, options = {}) {
     if (resultData.status === 'ready' && resultData.solution && resultData.solution.token) {
       return {
         token: resultData.solution.token,
-        userAgent: resultData.solution.userAgent
+        userAgent: resultData.solution.userAgent,
       };
     }
     if (resultData.status !== 'processing') {

@@ -64,8 +64,8 @@ export async function passCloudflareWithBrowser(url, options = {}) {
       '--disable-setuid-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--disable-features=IsolateOrigins,site-per-process',
-      '--window-size=1280,720'
-    ]
+      '--window-size=1280,720',
+    ],
   });
 
   try {
@@ -94,7 +94,9 @@ export async function passCloudflareWithBrowser(url, options = {}) {
         try {
           const json = text.replace('intercepted-params:', '').trim();
           const params = JSON.parse(json);
-          const { token } = await solveTurnstileChallengePage(params, { apiKey: options.captchaApiKey });
+          const { token } = await solveTurnstileChallengePage(params, {
+            apiKey: options.captchaApiKey,
+          });
           await page.evaluate((t) => {
             if (window.cfCallback) window.cfCallback(t);
           }, token);
@@ -109,7 +111,7 @@ export async function passCloudflareWithBrowser(url, options = {}) {
       try {
         await Promise.race([
           captchaDone,
-          new Promise((_, rej) => setTimeout(() => rej(new Error('NO_PARAMS')), 15000))
+          new Promise((_, rej) => setTimeout(() => rej(new Error('NO_PARAMS')), 15000)),
         ]);
       } catch (e) {
         if (e.message !== 'NO_PARAMS') throw e;
@@ -123,7 +125,7 @@ export async function passCloudflareWithBrowser(url, options = {}) {
       }
     } else {
       if (useStealth) {
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 1500));
       }
       await page.goto(url, { waitUntil: 'networkidle2', timeout });
 
@@ -132,7 +134,7 @@ export async function passCloudflareWithBrowser(url, options = {}) {
       while (Date.now() - start < waitMax) {
         const title = await page.title();
         if (!title.includes('Just a moment')) break;
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 800));
       }
     }
 
@@ -154,10 +156,10 @@ export async function passCloudflareWithBrowser(url, options = {}) {
     return {
       html,
       url: finalUrl,
-      cookies: cookies.map(c => ({ name: c.name, value: c.value })),
+      cookies: cookies.map((c) => ({ name: c.name, value: c.value })),
       title: finalTitle,
       stealthUsed: useStealth,
-      screenshotPath: screenshotPath || undefined
+      screenshotPath: screenshotPath || undefined,
     };
   } finally {
     await browser.close();

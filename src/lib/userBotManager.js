@@ -1,24 +1,31 @@
 import { Bot } from './bot.js';
 import { User } from './user.js';
 import { getNextUser, updateUserPriority } from './userRotation.js';
-import { 
-  getAvailableDates, 
-  isDateAvailable, 
-  isCacheStale, 
+import {
+  getAvailableDates,
+  isDateAvailable,
+  isCacheStale,
   refreshAllDates,
   initializeCache,
-  getCacheStats 
+  getCacheStats,
 } from './dateCache.js';
-import { 
+import {
   readUsers,
   readSettingsFromSheet,
-  updateUserLastChecked, 
-  updateUserCurrentDate, 
+  updateUserLastChecked,
+  updateUserCurrentDate,
   updateUserLastBooked,
   updateUserPriority as updateUserPriorityInSheets,
-  logBookingAttempt 
+  logBookingAttempt,
 } from './sheets.js';
-import { sendNotification, formatBookingSuccess, formatBookingSuccessWithDetails, formatSlotFound, formatBookingFailure, formatMonitorStarted } from './telegram.js';
+import {
+  sendNotification,
+  formatBookingSuccess,
+  formatBookingSuccessWithDetails,
+  formatSlotFound,
+  formatBookingFailure,
+  formatMonitorStarted,
+} from './telegram.js';
 import { log, sleep, formatErrorForLog } from './utils.js';
 import { getConfig } from './config.js';
 
@@ -42,6 +49,13 @@ export class UserBotManager {
 
     log(`Initializing ${users.length} users...`);
 
+    let adapterModule = null;
+    try {
+      adapterModule = await import('../adapters/index.js');
+    } catch {
+      // Adapters available only when running from dist (built TS)
+    }
+
     for (const user of users) {
       try {
         const botConfig = {
@@ -53,10 +67,25 @@ export class UserBotManager {
           refreshDelay: this.config.refreshInterval,
           provider: user.provider || 'ais',
           captchaSolver: this.config.captchaSolver || null,
-          captchaApiKey: this.config.captcha2CaptchaApiKey || null
+          captchaApiKey: this.config.captcha2CaptchaApiKey || null,
         };
 
-        const bot = new Bot(botConfig);
+        let client = null;
+        if (adapterModule?.createVisaProvider && adapterModule?.ProviderBackedClient) {
+          const provider = adapterModule.createVisaProvider(botConfig.provider, {
+            captcha2CaptchaApiKey: this.config.captcha2CaptchaApiKey || null,
+            captchaSolver: this.config.captchaSolver || null,
+          });
+          client = new adapterModule.ProviderBackedClient(provider, {
+            email: user.email,
+            password: user.password,
+            countryCode: user.countryCode,
+            scheduleId: user.scheduleId,
+            facilityId: this.config.facilityId,
+          });
+        }
+
+        const bot = new Bot(botConfig, client ? { client } : {});
         const sessionHeaders = await bot.initialize();
 
         this.bots.set(user.email, bot);
@@ -84,7 +113,9 @@ export class UserBotManager {
       const parts = [];
       if (!bot) parts.push('bot not initialized');
       if (!sessionHeaders) parts.push('session not initialized (not logged in)');
-      log(`User ${user.email}: ${parts.join(', ')} — skipping date check (login may have failed at startup)`);
+      log(
+        `User ${user.email}: ${parts.join(', ')} — skipping date check (login may have failed at startup)`
+      );
       return null;
     }
 
@@ -92,7 +123,10 @@ export class UserBotManager {
     const provider = user.provider || 'ais';
     const availableDates = getAvailableDates(provider);
 
-    if (availableDates.length === 0 || availableDates.some(date => isCacheStale(date, this.config.cacheTtl, provider))) {
+    if (
+      availableDates.length === 0 ||
+      availableDates.some((date) => isCacheStale(date, this.config.cacheTtl, provider))
+    ) {
       log(`Refreshing date cache for user ${user.email} (${provider})...`);
       try {
         await refreshAllDates(
@@ -104,7 +138,7 @@ export class UserBotManager {
           provider,
           {
             requestDelaySec: this.config.aisRequestDelaySec,
-            rateLimitBackoffSec: this.config.aisRateLimitBackoffSec
+            rateLimitBackoffSec: this.config.aisRateLimitBackoffSec,
           }
         );
         const refreshedDates = getAvailableDates(provider);
@@ -116,7 +150,7 @@ export class UserBotManager {
     }
 
     // Filter dates for this user
-    const validDates = availableDates.filter(date => {
+    const validDates = availableDates.filter((date) => {
       if (!user.isDateValid(date)) {
         return false;
       }
@@ -132,7 +166,7 @@ export class UserBotManager {
     validDates.sort();
     const selectedDate = validDates[0];
     log(`Found valid date ${selectedDate} for user ${user.email}`);
-    
+
     return selectedDate;
   }
 
@@ -155,7 +189,7 @@ export class UserBotManager {
         user_email: user.email,
         date_attempted: date,
         result: 'failure',
-        reason
+        reason,
       });
       log(`User ${user.email}: ${reason}`);
       return false;
@@ -186,7 +220,9 @@ export class UserBotManager {
    * @param {string} [timeSlot] - Booked time slot (e.g. "09:00")
    */
   async handleBookingSuccess(user, oldDate, newDate, timeSlot = null) {
-    log(`Booking successful for ${user.email}: ${oldDate} -> ${newDate}${timeSlot ? ` ${timeSlot}` : ''}`);
+    log(
+      `Booking successful for ${user.email}: ${oldDate} -> ${newDate}${timeSlot ? ` ${timeSlot}` : ''}`
+    );
 
     // Update user
     user.currentDate = newDate;
@@ -204,8 +240,8 @@ export class UserBotManager {
         reason: 'Appointment booked successfully',
         old_date: oldDate,
         new_date: newDate,
-        new_time: timeSlot
-      })
+        new_time: timeSlot,
+      }),
     ]);
 
     // Send Telegram notification with details (including time slot if available)
@@ -226,7 +262,7 @@ export class UserBotManager {
       user_email: user.email,
       date_attempted: date,
       result: 'failure',
-      reason: reason
+      reason: reason,
     });
 
     // Send Telegram notification with details
@@ -252,13 +288,15 @@ export class UserBotManager {
       try {
         // Refresh users from Sheets periodically
         const now = new Date();
-        if (!this.lastSheetsRefresh || 
-            (now - this.lastSheetsRefresh) / 1000 > this.config.sheetsRefreshInterval) {
+        if (
+          !this.lastSheetsRefresh ||
+          (now - this.lastSheetsRefresh) / 1000 > this.config.sheetsRefreshInterval
+        ) {
           log('Refreshing users and settings from Google Sheets...');
           try {
             const [sheetSettings, freshUsers] = await Promise.all([
               readSettingsFromSheet(),
-              readUsers()
+              readUsers(),
             ]);
             delete sheetSettings.googleSheetsId;
             delete sheetSettings.googleCredentialsPath;
@@ -297,7 +335,7 @@ export class UserBotManager {
             user_email: user.email,
             date_attempted: null,
             result: 'skipped',
-            reason: 'No valid dates found'
+            reason: 'No valid dates found',
           });
         }
 
@@ -306,12 +344,11 @@ export class UserBotManager {
         updateUserPriority(user, checkedAt);
         await Promise.all([
           updateUserLastChecked(user.email, checkedAt, user.rowIndex),
-          updateUserPriorityInSheets(user.email, user.priority, user.rowIndex)
+          updateUserPriorityInSheets(user.email, user.priority, user.rowIndex),
         ]);
 
         // Sleep before next iteration
         await sleep(this.config.refreshInterval);
-
       } catch (error) {
         log(`Error in monitoring loop: ${error.message}`);
         await sleep(this.config.refreshInterval);

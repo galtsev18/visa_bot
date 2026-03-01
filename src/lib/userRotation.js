@@ -12,7 +12,7 @@ export function getNextUser(users, cooldown = 30) {
   }
 
   // Filter users who need appointments
-  const activeUsers = users.filter(user => user.active && user.needsAppointment());
+  const activeUsers = users.filter((user) => user.active && user.needsAppointment());
 
   if (activeUsers.length === 0) {
     return null;
@@ -22,7 +22,7 @@ export function getNextUser(users, cooldown = 30) {
   const cooldownMs = cooldown * 1000;
 
   // Calculate priority for each user
-  const usersWithPriority = activeUsers.map(user => {
+  const usersWithPriority = activeUsers.map((user) => {
     let priority = 0;
 
     if (user.lastChecked) {
@@ -41,7 +41,8 @@ export function getNextUser(users, cooldown = 30) {
     // Lower priority if user recently got appointment
     if (user.lastBooked) {
       const timeSinceLastBooked = now - new Date(user.lastBooked);
-      if (timeSinceLastBooked < 24 * 60 * 60 * 1000) { // Within 24 hours
+      if (timeSinceLastBooked < 24 * 60 * 60 * 1000) {
+        // Within 24 hours
         priority *= 0.1; // Reduce priority significantly
       }
     }
@@ -78,14 +79,14 @@ export function updateUserPriority(user, checkedAt) {
  * @returns {Object}
  */
 export function getRotationStats(users) {
-  const activeUsers = users.filter(user => user.active && user.needsAppointment());
+  const activeUsers = users.filter((user) => user.active && user.needsAppointment());
   const now = new Date();
 
   const stats = {
     total: users.length,
     active: activeUsers.length,
     checkedRecently: 0,
-    needsCheck: 0
+    needsCheck: 0,
   };
 
   for (const user of activeUsers) {

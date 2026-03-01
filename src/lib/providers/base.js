@@ -24,5 +24,5 @@
 
 export const PROVIDER_NAMES = Object.freeze({
   AIS: 'ais',
-  VFSGLOBAL: 'vfsglobal'
+  VFSGLOBAL: 'vfsglobal',
 });

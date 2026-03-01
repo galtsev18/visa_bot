@@ -38,7 +38,10 @@ program
   .description('Test VFS login page: detect captcha type and optionally solve it')
   .option('--browser', 'Use browser (Puppeteer) to try to pass Cloudflare')
   .option('--visible', 'Show browser window (use with --browser; Cloudflare may pass more often)')
-  .option('--screenshot [path]', 'Save screenshot of rendered page (use with --browser); default: vfs-page-screenshot.png')
+  .option(
+    '--screenshot [path]',
+    'Save screenshot of rendered page (use with --browser); default: vfs-page-screenshot.png'
+  )
   .option('--solve', 'Solve captcha via 2Captcha (requires CAPTCHA_2CAPTCHA_API_KEY)')
   .option('--email <email>', 'Email for login attempt (use with --solve and --password)')
   .option('--password <password>', 'Password for login attempt')

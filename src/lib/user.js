@@ -21,9 +21,8 @@ export class User {
     let dateRanges = [];
     if (data.date_ranges) {
       try {
-        const rangesJson = typeof data.date_ranges === 'string' 
-          ? JSON.parse(data.date_ranges) 
-          : data.date_ranges;
+        const rangesJson =
+          typeof data.date_ranges === 'string' ? JSON.parse(data.date_ranges) : data.date_ranges;
         dateRanges = parseDateRanges(rangesJson);
       } catch (e) {
         console.error(`Failed to parse date ranges for user ${this.email}:`, e);
@@ -148,16 +147,19 @@ export class User {
       schedule_id: this.scheduleId,
       current_date: this.currentDate,
       reaction_time: this.reactionTime,
-      date_ranges: this.dateRanges.length > 0 
-        ? JSON.stringify(this.dateRanges.map(r => ({
-            from: formatDate(r.from),
-            to: formatDate(r.to)
-          })))
-        : null,
+      date_ranges:
+        this.dateRanges.length > 0
+          ? JSON.stringify(
+              this.dateRanges.map((r) => ({
+                from: formatDate(r.from),
+                to: formatDate(r.to),
+              }))
+            )
+          : null,
       active: this.active,
       last_checked: this.lastChecked ? this.lastChecked.toISOString() : null,
       last_booked: this.lastBooked,
-      priority: this.priority
+      priority: this.priority,
     };
   }
 }

@@ -33,8 +33,8 @@ export async function sendNotification(message, managerChatId) {
       body: JSON.stringify({
         chat_id: String(managerChatId).trim(),
         text: message,
-        parse_mode: 'HTML'
-      })
+        parse_mode: 'HTML',
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!data.ok) {

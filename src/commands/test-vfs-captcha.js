@@ -17,7 +17,8 @@ const VFS_LOGIN_URL = 'https://visa.vfsglobal.com/rus/en/fra/login';
  */
 export async function testVfsCaptchaCommand(options = {}) {
   const config = getConfig();
-  const captchaApiKey = config.captcha2CaptchaApiKey || process.env.CAPTCHA_2CAPTCHA_API_KEY || null;
+  const captchaApiKey =
+    config.captcha2CaptchaApiKey || process.env.CAPTCHA_2CAPTCHA_API_KEY || null;
 
   const doSolve = options.solve === true;
   const doLogin = !!(options.email && options.password);
@@ -39,10 +40,13 @@ export async function testVfsCaptchaCommand(options = {}) {
       log('Opening VFS login page in visible browser (Puppeteer)...');
     }
     try {
-      const screenshotPath = options.screenshot === true ? 'vfs-page-screenshot.png' : (options.screenshot || null);
+      const screenshotPath =
+        options.screenshot === true ? 'vfs-page-screenshot.png' : options.screenshot || null;
       const use2Captcha = doSolve && !!captchaApiKey;
       if (doSolve && !captchaApiKey) {
-        log('2Captcha API key not set (config or CAPTCHA_2CAPTCHA_API_KEY); Cloudflare challenge will not be solved via 2Captcha.');
+        log(
+          '2Captcha API key not set (config or CAPTCHA_2CAPTCHA_API_KEY); Cloudflare challenge will not be solved via 2Captcha.'
+        );
       }
       if (use2Captcha) {
         log('Will try to solve Cloudflare Turnstile with 2Captcha after page load.');
@@ -52,7 +56,7 @@ export async function testVfsCaptchaCommand(options = {}) {
         headless,
         screenshotPath: screenshotPath || undefined,
         use2Captcha: use2Captcha || undefined,
-        captchaApiKey: captchaApiKey || undefined
+        captchaApiKey: captchaApiKey || undefined,
       });
       html = result.html;
       resUrl = result.url;
@@ -77,11 +81,12 @@ export async function testVfsCaptchaCommand(options = {}) {
     try {
       res = await fetch(VFS_LOGIN_URL, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9'
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
         },
-        redirect: 'follow'
+        redirect: 'follow',
       });
       html = await res.text();
       resUrl = res.url;
@@ -93,15 +98,18 @@ export async function testVfsCaptchaCommand(options = {}) {
 
   function getCookieHeader() {
     if (cookiesFromBrowser && cookiesFromBrowser.length) {
-      return cookiesFromBrowser.map(c => `${c.name}=${c.value}`).join('; ');
+      return cookiesFromBrowser.map((c) => `${c.name}=${c.value}`).join('; ');
     }
     const setCookie = res ? res.headers.get('set-cookie') || '' : '';
-    return setCookie.split(',').reduce((acc, part) => {
-      const [nameVal] = part.split(';').map(s => s.trim());
-      const [name, value] = (nameVal || '').split('=').map(s => s && s.trim());
-      if (name && value) acc.push(`${name}=${value}`);
-      return acc;
-    }, []).join('; ');
+    return setCookie
+      .split(',')
+      .reduce((acc, part) => {
+        const [nameVal] = part.split(';').map((s) => s.trim());
+        const [name, value] = (nameVal || '').split('=').map((s) => s && s.trim());
+        if (name && value) acc.push(`${name}=${value}`);
+        return acc;
+      }, [])
+      .join('; ');
   }
 
   const $ = cheerio.load(html);
@@ -121,7 +129,9 @@ export async function testVfsCaptchaCommand(options = {}) {
   const formMethod = (form.attr('method') || 'post').toLowerCase();
   const formUrl = formAction.startsWith('http')
     ? formAction
-    : formAction ? new URL(formAction, VFS_LOGIN_URL).href : VFS_LOGIN_URL;
+    : formAction
+      ? new URL(formAction, VFS_LOGIN_URL).href
+      : VFS_LOGIN_URL;
 
   console.log('\n--- Form ---');
   console.log('Method:', formMethod);
@@ -174,7 +184,10 @@ export async function testVfsCaptchaCommand(options = {}) {
     const src = captchaImg.attr('src') || '';
     captchaInfo = { imageSrc: src };
     console.log('\n--- Captcha: Image ---');
-    console.log('Image src (first 120 chars):', src ? src.substring(0, 120) + (src.length > 120 ? '...' : '') : 'none');
+    console.log(
+      'Image src (first 120 chars):',
+      src ? src.substring(0, 120) + (src.length > 120 ? '...' : '') : 'none'
+    );
   } else {
     console.log('\n--- No captcha detected ---');
     console.log('Checked: Cloudflare, .cf-turnstile, [data-sitekey], .g-recaptcha, img.captcha');
@@ -186,12 +199,22 @@ export async function testVfsCaptchaCommand(options = {}) {
     console.log('\n--- Solving captcha ---');
     try {
       if (captchaType === 'turnstile') {
-        const token = await solveTurnstile(captchaInfo.siteKey, captchaInfo.pageUrl, { apiKey: captchaApiKey });
-        console.log('Turnstile token (first 80 chars):', token ? token.substring(0, 80) + '...' : '');
+        const token = await solveTurnstile(captchaInfo.siteKey, captchaInfo.pageUrl, {
+          apiKey: captchaApiKey,
+        });
+        console.log(
+          'Turnstile token (first 80 chars):',
+          token ? token.substring(0, 80) + '...' : ''
+        );
         captchaInfo.solution = token;
       } else if (captchaType === 'recaptcha') {
-        const token = await solveRecaptchaV2(captchaInfo.siteKey, captchaInfo.pageUrl, { apiKey: captchaApiKey });
-        console.log('reCAPTCHA token (first 80 chars):', token ? token.substring(0, 80) + '...' : '');
+        const token = await solveRecaptchaV2(captchaInfo.siteKey, captchaInfo.pageUrl, {
+          apiKey: captchaApiKey,
+        });
+        console.log(
+          'reCAPTCHA token (first 80 chars):',
+          token ? token.substring(0, 80) + '...' : ''
+        );
         captchaInfo.solution = token;
       } else {
         let imageBase64 = captchaInfo.imageSrc || '';
@@ -236,12 +259,13 @@ export async function testVfsCaptchaCommand(options = {}) {
         method: 'POST',
         redirect: 'follow',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie': getCookieHeader(),
-          'Referer': resUrl || VFS_LOGIN_URL
+          Cookie: getCookieHeader(),
+          Referer: resUrl || VFS_LOGIN_URL,
         },
-        body: new URLSearchParams(turnstileFormData)
+        body: new URLSearchParams(turnstileFormData),
       });
       const passHtml = await passRes.text();
       const $pass = cheerio.load(passHtml);
@@ -251,7 +275,9 @@ export async function testVfsCaptchaCommand(options = {}) {
       console.log('Final URL:', passRes.url);
       console.log('Page title:', passTitle);
       if (!passTitle.includes('Just a moment')) {
-        console.log('Cloudflare challenge may be passed. You can use the cookies from this response for further requests.');
+        console.log(
+          'Cloudflare challenge may be passed. You can use the cookies from this response for further requests.'
+        );
       }
     } catch (e) {
       console.log('Turnstile submit failed:', e.message);
@@ -261,7 +287,9 @@ export async function testVfsCaptchaCommand(options = {}) {
   // Optional: try login with provided credentials (and solution if we solved)
   if (doLogin && captchaType) {
     if (!captchaInfo.solution) {
-      console.error('Login requires solving captcha first. Run with --solve --email ... --password ...');
+      console.error(
+        'Login requires solving captcha first. Run with --solve --email ... --password ...'
+      );
       process.exit(1);
     }
     const email = options.email;
@@ -275,7 +303,9 @@ export async function testVfsCaptchaCommand(options = {}) {
       if (name && type !== 'submit' && type !== 'image') formData[name] = value;
     });
 
-    const emailKey = form.find('input[type="email"], input[name*="mail"], input[name*="user"]').attr('name');
+    const emailKey = form
+      .find('input[type="email"], input[name*="mail"], input[name*="user"]')
+      .attr('name');
     const passwordKey = form.find('input[type="password"]').attr('name');
     if (emailKey) formData[emailKey] = email;
     else formData['email'] = email;
@@ -287,7 +317,9 @@ export async function testVfsCaptchaCommand(options = {}) {
     } else if (captchaType === 'turnstile') {
       formData['cf-turnstile-response'] = captchaInfo.solution;
     } else {
-      const captchaInputName = form.find('input[name*="captcha"], input[name*="captcha_response"]').attr('name') || 'captcha';
+      const captchaInputName =
+        form.find('input[name*="captcha"], input[name*="captcha_response"]').attr('name') ||
+        'captcha';
       formData[captchaInputName] = captchaInfo.solution;
     }
 
@@ -296,12 +328,13 @@ export async function testVfsCaptchaCommand(options = {}) {
       method: formMethod === 'get' ? 'GET' : 'POST',
       redirect: 'manual',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': getCookieHeader(),
-        'Referer': VFS_LOGIN_URL
+        Cookie: getCookieHeader(),
+        Referer: VFS_LOGIN_URL,
       },
-      body: formMethod === 'get' ? null : new URLSearchParams(formData)
+      body: formMethod === 'get' ? null : new URLSearchParams(formData),
     });
 
     const location = postRes.headers.get('location') || '';

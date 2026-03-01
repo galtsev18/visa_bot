@@ -31,7 +31,9 @@ export function setSheetsQuotaNotifier(/** @type {(event: 'exceeded'|'resolved')
 
 function isQuotaError(err) {
   const msg = err?.message ?? '';
-  return err?.response?.status === 429 || msg.includes('Quota exceeded') || msg.includes('quota metric');
+  return (
+    err?.response?.status === 429 || msg.includes('Quota exceeded') || msg.includes('quota metric')
+  );
 }
 
 /**
@@ -74,7 +76,7 @@ async function withQuotaRetry(fn) {
 function formatDateTimeForSheet(dateStr, timeStr) {
   const d = (dateStr || '').toString().trim().slice(0, 10);
   if (!d) return '';
-  const t = (timeStr && timeStr.toString().trim()) ? timeStr.toString().trim().slice(0, 5) : '00:00';
+  const t = timeStr && timeStr.toString().trim() ? timeStr.toString().trim().slice(0, 5) : '00:00';
   return `${d} ${t}`;
 }
 
@@ -99,20 +101,22 @@ function columnIndexToLetter(index) {
  */
 async function ensureSheetsExist() {
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-  const existingTitles = (spreadsheet.data.sheets || []).map(s => s.properties?.title).filter(Boolean);
+  const existingTitles = (spreadsheet.data.sheets || [])
+    .map((s) => s.properties?.title)
+    .filter(Boolean);
   const required = [SHEET_USERS, SHEET_CACHE, SHEET_LOGS, SHEET_SETTINGS];
-  const missing = required.filter(name => !existingTitles.includes(name));
+  const missing = required.filter((name) => !existingTitles.includes(name));
   if (missing.length === 0) return;
   log(`Creating ${missing.length} sheet(s): ${missing.join(', ')}...`);
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     resource: {
-      requests: missing.map(sheetName => ({
-        addSheet: { properties: { title: sheetName } }
-      }))
-    }
+      requests: missing.map((sheetName) => ({
+        addSheet: { properties: { title: sheetName } },
+      })),
+    },
   });
-  missing.forEach(name => log(`✅ Created sheet "${name}"`));
+  missing.forEach((name) => log(`✅ Created sheet "${name}"`));
 }
 
 /**
@@ -134,15 +138,43 @@ export async function initializeSheets(credentialsPath, sheetId) {
     await ensureSheetsExist();
     await ensureHeaders();
     return true;
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to initialize Google Sheets: ${error.message}`);
     throw error;
   });
 }
 
-const USERS_HEADERS = ['email', 'password', 'country_code', 'schedule_id', 'current_date', 'reaction_time', 'date_ranges', 'active', 'last_checked', 'last_booked', 'priority', 'provider'];
-const CACHE_HEADERS = ['date', 'facility_id', 'available', 'last_checked', 'times_available', 'cache_valid_until'];
-const LOGS_HEADERS = ['timestamp', 'user_email', 'date_attempted', 'result', 'reason', 'old_date', 'new_date'];
+const USERS_HEADERS = [
+  'email',
+  'password',
+  'country_code',
+  'schedule_id',
+  'current_date',
+  'reaction_time',
+  'date_ranges',
+  'active',
+  'last_checked',
+  'last_booked',
+  'priority',
+  'provider',
+];
+const CACHE_HEADERS = [
+  'date',
+  'facility_id',
+  'available',
+  'last_checked',
+  'times_available',
+  'cache_valid_until',
+];
+const LOGS_HEADERS = [
+  'timestamp',
+  'user_email',
+  'date_attempted',
+  'result',
+  'reason',
+  'old_date',
+  'new_date',
+];
 const SETTINGS_HEADERS = ['key', 'value'];
 
 /**
@@ -156,8 +188,8 @@ async function ensureHeaders() {
         `${SHEET_USERS}!1:1`,
         `${SHEET_CACHE}!1:1`,
         `${SHEET_LOGS}!1:1`,
-        `${SHEET_SETTINGS}!1:1`
-      ]
+        `${SHEET_SETTINGS}!1:1`,
+      ],
     });
 
     const valueRanges = batch.data.valueRanges || [];
@@ -179,9 +211,15 @@ async function ensureHeaders() {
     if (!logsRow || logsRow.length === 0) {
       updates.push({ range: `${SHEET_LOGS}!1:1`, values: [LOGS_HEADERS] });
     }
-    const settingsValid = settingsRow && settingsRow.length >= 2 &&
-      String(settingsRow[0] || '').toLowerCase().trim() === 'key' &&
-      String(settingsRow[1] || '').toLowerCase().trim() === 'value';
+    const settingsValid =
+      settingsRow &&
+      settingsRow.length >= 2 &&
+      String(settingsRow[0] || '')
+        .toLowerCase()
+        .trim() === 'key' &&
+      String(settingsRow[1] || '')
+        .toLowerCase()
+        .trim() === 'value';
     if (!settingsValid) {
       updates.push({ range: `${SHEET_SETTINGS}!1:1`, values: [SETTINGS_HEADERS] });
     }
@@ -191,17 +229,22 @@ async function ensureHeaders() {
         spreadsheetId,
         resource: {
           valueInputOption: 'RAW',
-          data: updates
-        }
+          data: updates,
+        },
       });
-      updates.forEach(u => log(`Created headers for ${u.range.split('!')[0]}`));
+      updates.forEach((u) => log(`Created headers for ${u.range.split('!')[0]}`));
     }
 
     log('All sheet headers verified/created');
   } catch (error) {
-    if (error.message && (error.message.includes('Unable to parse range') || error.response?.status === 400)) {
+    if (
+      error.message &&
+      (error.message.includes('Unable to parse range') || error.response?.status === 400)
+    ) {
       log('⚠️  Warning: One or more sheets may not exist.');
-      log('Required sheets: 1. "Users"  2. "Available Dates Cache"  3. "Booking Attempts Log"  4. "Settings"');
+      log(
+        'Required sheets: 1. "Users"  2. "Available Dates Cache"  3. "Booking Attempts Log"  4. "Settings"'
+      );
     } else {
       log(`⚠️  Warning: Failed to ensure headers: ${error.message}`);
     }
@@ -251,8 +294,12 @@ export async function readSettingsFromSheet() {
     const rows = response.data.values || [];
     if (rows.length < 1) return {};
 
-    const headerKey = String(rows[0][0] || '').toLowerCase().trim();
-    const headerVal = String(rows[0][1] || '').toLowerCase().trim();
+    const headerKey = String(rows[0][0] || '')
+      .toLowerCase()
+      .trim();
+    const headerVal = String(rows[0][1] || '')
+      .toLowerCase()
+      .trim();
     if (headerKey !== 'key' || headerVal !== 'value') {
       log('Settings sheet: invalid structure (expected key, value). Fixing headers.');
       await sheets.spreadsheets.values.update({
@@ -269,13 +316,16 @@ export async function readSettingsFromSheet() {
     // Ensure all known setting keys exist (create rows with defaults if missing)
     const existingKeys = new Set();
     for (let i = 1; i < rows.length; i++) {
-      const k = String((rows[i] || [])[0] || '').trim().toUpperCase().replace(/\s+/g, '_');
+      const k = String((rows[i] || [])[0] || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '_');
       if (k) existingKeys.add(k);
     }
     const allKeys = Object.keys(SETTINGS_KEY_MAP);
-    const missingKeys = allKeys.filter(k => !existingKeys.has(k));
+    const missingKeys = allKeys.filter((k) => !existingKeys.has(k));
     if (missingKeys.length > 0) {
-      const appendRows = missingKeys.map(k => [k, SETTINGS_DEFAULT_VALUES[k] ?? '']);
+      const appendRows = missingKeys.map((k) => [k, SETTINGS_DEFAULT_VALUES[k] ?? '']);
       await sheets.spreadsheets.values.append({
         spreadsheetId,
         range: `${SHEET_SETTINGS}!A:B`,
@@ -288,7 +338,7 @@ export async function readSettingsFromSheet() {
       for (const k of missingKeys) {
         const mapping = SETTINGS_KEY_MAP[k];
         const raw = SETTINGS_DEFAULT_VALUES[k] ?? '';
-        const value = mapping.number ? Number(raw) : (raw != null ? String(raw).trim() : '');
+        const value = mapping.number ? Number(raw) : raw != null ? String(raw).trim() : '';
         if (!mapping.number || (!Number.isNaN(value) && value !== undefined)) {
           overrides[mapping.configKey] = value;
         }
@@ -298,13 +348,17 @@ export async function readSettingsFromSheet() {
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.length < 1) continue;
-      const key = String(row[0] || '').trim().toUpperCase().replace(/\s+/g, '_');
+      const key = String(row[0] || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '_');
       const raw = row[1];
       if (!key) continue;
       const mapping = SETTINGS_KEY_MAP[key];
       if (!mapping) continue;
-      if (mapping.configKey === 'googleSheetsId' || mapping.configKey === 'googleCredentialsPath') continue;
-      const value = mapping.number ? Number(raw) : (raw != null ? String(raw).trim() : '');
+      if (mapping.configKey === 'googleSheetsId' || mapping.configKey === 'googleCredentialsPath')
+        continue;
+      const value = mapping.number ? Number(raw) : raw != null ? String(raw).trim() : '';
       if (mapping.number && (value === undefined || Number.isNaN(value))) continue;
       overrides[mapping.configKey] = value;
     }
@@ -312,7 +366,7 @@ export async function readSettingsFromSheet() {
       log(`Settings from sheet: ${Object.keys(overrides).join(', ')}`);
     }
     return overrides;
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to read Settings sheet: ${error.message}`);
     return {};
   });
@@ -336,7 +390,7 @@ export async function readUsers() {
     }
 
     // First row is headers
-    const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+    const headers = rows[0].map((h) => h.toLowerCase().replace(/\s+/g, '_'));
     const users = [];
 
     for (let i = 1; i < rows.length; i++) {
@@ -364,7 +418,7 @@ export async function readUsers() {
 
     log(`Read ${users.length} active users from Google Sheets`);
     return users;
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to read users from Google Sheets: ${error.message}`);
     throw error;
   });
@@ -379,10 +433,7 @@ export async function getInitialData() {
   return withQuotaRetry(async () => {
     const batch = await sheets.spreadsheets.values.batchGet({
       spreadsheetId,
-      ranges: [
-        `${SHEET_USERS}!A1:Z1000`,
-        `${SHEET_CACHE}!A1:F1000`
-      ]
+      ranges: [`${SHEET_USERS}!A1:Z1000`, `${SHEET_CACHE}!A1:F1000`],
     });
     const valueRanges = batch.data.valueRanges || [];
     const usersRows = valueRanges[0]?.values || [];
@@ -393,7 +444,7 @@ export async function getInitialData() {
 
     const users = [];
     if (usersRows.length >= 2) {
-      const headers = usersRows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+      const headers = usersRows[0].map((h) => h.toLowerCase().replace(/\s+/g, '_'));
       usersHeaderCache = usersRows[0];
       for (let i = 1; i < usersRows.length; i++) {
         const row = usersRows[i];
@@ -402,7 +453,8 @@ export async function getInitialData() {
         headers.forEach((header, index) => {
           userData[header] = row[index] || '';
         });
-        if (userData.active !== true && userData.active !== 'true' && userData.active !== 'TRUE') continue;
+        if (userData.active !== true && userData.active !== 'true' && userData.active !== 'TRUE')
+          continue;
         try {
           const oneBasedRow = i + 1;
           userData.rowIndex = oneBasedRow;
@@ -417,7 +469,7 @@ export async function getInitialData() {
 
     const cacheEntries = [];
     if (cacheRows.length >= 2) {
-      const headers = cacheRows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+      const headers = cacheRows[0].map((h) => h.toLowerCase().replace(/\s+/g, '_'));
       for (let i = 1; i < cacheRows.length; i++) {
         const row = cacheRows[i];
         if (!row || row.length === 0) continue;
@@ -441,7 +493,7 @@ export async function getInitialData() {
 
     log(`Initial data: ${users.length} users, ${cacheEntries.length} cache entries (1 batch read)`);
     return { users, cacheEntries };
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to get initial data: ${error.message}`);
     throw error;
   });
@@ -463,7 +515,7 @@ export async function readAvailableDatesCache() {
       return [];
     }
 
-    const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+    const headers = rows[0].map((h) => h.toLowerCase().replace(/\s+/g, '_'));
     const cache = [];
 
     for (let i = 1; i < rows.length; i++) {
@@ -498,7 +550,7 @@ export async function readAvailableDatesCache() {
 
     log(`Read ${cache.length} cache entries from Google Sheets`);
     return cache;
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to read cache from Google Sheets: ${error.message}`);
     return [];
   });
@@ -530,7 +582,7 @@ export async function updateAvailableDate(date, available, times = [], facilityI
     }
 
     const now = new Date();
-    const cacheValidUntil = new Date(now.getTime() + (60 * 1000));
+    const cacheValidUntil = new Date(now.getTime() + 60 * 1000);
     const dateWithTime = formatDateTimeForSheet(date, times[0]);
     const values = [
       dateWithTime,
@@ -538,7 +590,7 @@ export async function updateAvailableDate(date, available, times = [], facilityI
       available ? 'TRUE' : 'FALSE',
       now.toISOString(),
       JSON.stringify(times),
-      cacheValidUntil.toISOString()
+      cacheValidUntil.toISOString(),
     ];
 
     if (rowIndex != null && rowIndex > 0) {
@@ -563,7 +615,7 @@ export async function updateAvailableDate(date, available, times = [], facilityI
     }
 
     log(`Updated cache for date ${date}: available=${available}`);
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to update cache for date ${date}: ${error.message}`);
   });
 }
@@ -581,7 +633,7 @@ export async function logBookingAttempt(attempt) {
       attempt.result || 'unknown',
       attempt.reason || '',
       formatDateTimeForSheet(attempt.old_date, attempt.old_time),
-      formatDateTimeForSheet(attempt.new_date, attempt.new_time)
+      formatDateTimeForSheet(attempt.new_date, attempt.new_time),
     ];
 
     await sheets.spreadsheets.values.append({
@@ -592,7 +644,7 @@ export async function logBookingAttempt(attempt) {
     });
 
     log(`Logged booking attempt: ${attempt.user_email} - ${attempt.result}`);
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to log booking attempt: ${error.message}`);
   });
 }
@@ -615,7 +667,9 @@ async function getColumnIndex(headerName) {
     }
     const normalizedHeader = headerName.toLowerCase().replace(/\s+/g, '_');
     for (let i = 0; i < headers.length; i++) {
-      const normalized = String(headers[i] || '').toLowerCase().replace(/\s+/g, '_');
+      const normalized = String(headers[i] || '')
+        .toLowerCase()
+        .replace(/\s+/g, '_');
       if (normalized === normalizedHeader) return i;
     }
     return -1;
@@ -672,7 +726,7 @@ export async function updateUserLastChecked(email, timestamp, rowIndex) {
         resource: { values: [[timestamp.toISOString()]] },
       });
     }
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to update last_checked for ${email}: ${error.message}`);
   });
 }
@@ -727,7 +781,7 @@ export async function updateUserCurrentDate(email, newDate, timeSlot = null, row
         resource: { values: [[value]] },
       });
     }
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to update current_date for ${email}: ${error.message}`);
   });
 }
@@ -782,7 +836,7 @@ export async function updateUserLastBooked(email, date, timeSlot = null, rowInde
         resource: { values: [[value]] },
       });
     }
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to update last_booked for ${email}: ${error.message}`);
   });
 }
@@ -834,7 +888,7 @@ export async function updateUserPriority(email, priority, rowIndex) {
         resource: { values: [[priority]] },
       });
     }
-  }).catch(error => {
+  }).catch((error) => {
     log(`Failed to update priority for ${email}: ${error.message}`);
   });
 }

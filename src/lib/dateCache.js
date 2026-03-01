@@ -25,7 +25,9 @@ export async function initializeCache(preloadedEntries) {
         available: entry.available === true || entry.available === 'TRUE',
         times: entry.times_available || [],
         lastChecked: entry.last_checked ? new Date(entry.last_checked) : new Date(),
-        validUntil: entry.cache_valid_until ? new Date(entry.cache_valid_until) : new Date(Date.now() + 60000)
+        validUntil: entry.cache_valid_until
+          ? new Date(entry.cache_valid_until)
+          : new Date(Date.now() + 60000),
       });
     }
 
@@ -116,16 +118,16 @@ export function isCacheStale(date, ttl = 60, provider = 'ais') {
  */
 export function updateDate(date, available, times = [], ttl = 60, provider = 'ais') {
   const now = new Date();
-  const validUntil = new Date(now.getTime() + (ttl * 1000));
+  const validUntil = new Date(now.getTime() + ttl * 1000);
   const key = cacheKey(provider, date);
   cache.set(key, {
     available,
     times,
     lastChecked: now,
-    validUntil
+    validUntil,
   });
 
-  updateAvailableDate(date, available, times).catch(err => {
+  updateAvailableDate(date, available, times).catch((err) => {
     log(`Failed to update cache in Sheets for ${date}: ${err.message}`);
   });
 }
@@ -185,7 +187,16 @@ export function getCacheStats() {
  * @param {{ rateLimitBackoffSec?: number }} [options] - When socket hang up (rate limit), wait this many sec before retry
  * @returns {Promise<Object>} - { available, times }
  */
-export async function refreshDate(date, client, headers, scheduleId, facilityId, ttl = 60, provider = 'ais', options = {}) {
+export async function refreshDate(
+  date,
+  client,
+  headers,
+  scheduleId,
+  facilityId,
+  ttl = 60,
+  provider = 'ais',
+  options = {}
+) {
   const rateLimitBackoffSec = options.rateLimitBackoffSec ?? 30;
 
   const tryFetch = async () => {
@@ -201,7 +212,9 @@ export async function refreshDate(date, client, headers, scheduleId, facilityId,
     return await tryFetch();
   } catch (error) {
     if (isSocketHangupError(error)) {
-      log(`Rate limit / socket hang up for date ${date}, backing off ${rateLimitBackoffSec}s before retry...`);
+      log(
+        `Rate limit / socket hang up for date ${date}, backing off ${rateLimitBackoffSec}s before retry...`
+      );
       await sleep(rateLimitBackoffSec);
       try {
         return await tryFetch();
@@ -231,7 +244,15 @@ export async function refreshDate(date, client, headers, scheduleId, facilityId,
 const HEARTBEAT_INTERVAL_MS = 30 * 1000; // log every 30s while waiting for API
 const PROGRESS_STEP = 10; // log progress every N dates
 
-export async function refreshAllDates(client, headers, scheduleId, facilityId, ttl = 60, provider = 'ais', options = {}) {
+export async function refreshAllDates(
+  client,
+  headers,
+  scheduleId,
+  facilityId,
+  ttl = 60,
+  provider = 'ais',
+  options = {}
+) {
   const requestDelaySec = options.requestDelaySec ?? 2;
   const rateLimitBackoffSec = options.rateLimitBackoffSec ?? 30;
 
@@ -250,12 +271,23 @@ export async function refreshAllDates(client, headers, scheduleId, facilityId, t
       log('No dates available from API');
       return [];
     }
-    log(`Received ${dates.length} dates. Checking availability (delay ${requestDelaySec}s between requests)...`);
+    log(
+      `Received ${dates.length} dates. Checking availability (delay ${requestDelaySec}s between requests)...`
+    );
     const availableDates = [];
     const total = dates.length;
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
-      const result = await refreshDate(date, client, headers, scheduleId, facilityId, ttl, provider, { rateLimitBackoffSec });
+      const result = await refreshDate(
+        date,
+        client,
+        headers,
+        scheduleId,
+        facilityId,
+        ttl,
+        provider,
+        { rateLimitBackoffSec }
+      );
       if (result.available) availableDates.push(date);
       const n = i + 1;
       if (n % PROGRESS_STEP === 0 || n === total) {

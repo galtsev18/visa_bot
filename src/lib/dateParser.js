@@ -65,9 +65,7 @@ export function parseDateRanges(ranges) {
     return [];
   }
 
-  return ranges
-    .map(range => parseDateRange(range))
-    .filter(range => range !== null);
+  return ranges.map((range) => parseDateRange(range)).filter((range) => range !== null);
 }
 
 /**
@@ -95,7 +93,7 @@ export function isDateInRanges(date, ranges) {
   const checkDate = new Date(dateObj);
   checkDate.setHours(0, 0, 0, 0);
 
-  return ranges.some(range => {
+  return ranges.some((range) => {
     return checkDate >= range.from && checkDate <= range.to;
   });
 }
@@ -109,7 +107,7 @@ export function formatDate(date) {
   if (typeof date === 'string') {
     return date.split('T')[0];
   }
-  
+
   if (date instanceof Date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');

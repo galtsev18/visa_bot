@@ -44,7 +44,7 @@ export async function botCommand(options) {
 
           options = {
             ...options,
-            current: currentBookedDate
+            current: currentBookedDate,
           };
 
           if (targetDate && availableDate <= targetDate) {

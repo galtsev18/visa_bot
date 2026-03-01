@@ -44,13 +44,14 @@ export class VfsGlobalClient {
   async login() {
     log('VFS Global: Loading login page...');
     const loginUrl = `${this.baseUri}/login`;
-    const res = await fetch(loginUrl, {
+    let res = await fetch(loginUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
-      redirect: 'follow'
+      redirect: 'follow',
     });
     let html = await res.text();
     let $ = cheerio.load(html);
@@ -70,13 +71,21 @@ export class VfsGlobalClient {
     if (isCloudflare && turnstileSiteKey) {
       log('VFS Global: Cloudflare Turnstile challenge detected, solving...');
       const token = this.captchaSolver
-        ? await this.captchaSolver({ type: 'turnstile', siteKey: turnstileSiteKey, pageUrl: loginUrl })
+        ? await this.captchaSolver({
+            type: 'turnstile',
+            siteKey: turnstileSiteKey,
+            pageUrl: loginUrl,
+          })
         : await solveTurnstile(turnstileSiteKey, loginUrl, { apiKey: this.captchaApiKey });
       const cookies = this._parseCookies(res.headers.get('set-cookie') || '');
-      const cookieHeader = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ');
+      const cookieHeader = Object.entries(cookies)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('; ');
       const form = $('form').first();
       const action = form.attr('action') || '';
-      const formUrl = action.startsWith('http') ? action : new URL(action || loginUrl, loginUrl).href;
+      const formUrl = action.startsWith('http')
+        ? action
+        : new URL(action || loginUrl, loginUrl).href;
       const turnstileFormData = {};
       form.find('input[name]').each((_, el) => {
         const name = $(el).attr('name');
@@ -88,12 +97,13 @@ export class VfsGlobalClient {
         method: 'POST',
         redirect: 'follow',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie': cookieHeader,
-          'Referer': loginUrl
+          Cookie: cookieHeader,
+          Referer: loginUrl,
         },
-        body: new URLSearchParams(turnstileFormData)
+        body: new URLSearchParams(turnstileFormData),
       });
       const passHtml = await passRes.text();
       const $pass = cheerio.load(passHtml);
@@ -105,15 +115,21 @@ export class VfsGlobalClient {
         );
       }
       // Re-fetch login page with the cookies from passRes to get the real form
-      const mergedCookies = { ...cookies, ...this._parseCookies(passRes.headers.get('set-cookie') || '') };
-      const finalCookieAfterCf = Object.entries(mergedCookies).map(([k, v]) => `${k}=${v}`).join('; ');
+      const mergedCookies = {
+        ...cookies,
+        ...this._parseCookies(passRes.headers.get('set-cookie') || ''),
+      };
+      const finalCookieAfterCf = Object.entries(mergedCookies)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('; ');
       res = await fetch(loginUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Cookie': finalCookieAfterCf,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Cookie: finalCookieAfterCf,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
-        redirect: 'follow'
+        redirect: 'follow',
       });
       html = await res.text();
       $ = cheerio.load(html);
@@ -142,7 +158,9 @@ export class VfsGlobalClient {
     });
 
     // Add credentials - use keys that exist in form, or fallbacks
-    const emailKey = form.find('input[type="email"], input[name*="mail"], input[name*="user"]').attr('name');
+    const emailKey = form
+      .find('input[type="email"], input[name*="mail"], input[name*="user"]')
+      .attr('name');
     const passwordKey = form.find('input[type="password"]').attr('name');
     if (emailKey) formData[emailKey] = this.email;
     else formData['email'] = formData['Email'] = formData['username'] = this.email;
@@ -150,13 +168,18 @@ export class VfsGlobalClient {
     else formData['password'] = formData['Password'] = this.password;
 
     // Detect and solve captcha
-    const recaptchaSiteKey = $('[data-sitekey]').attr('data-sitekey') || $('div.g-recaptcha').attr('data-sitekey');
+    const recaptchaSiteKey =
+      $('[data-sitekey]').attr('data-sitekey') || $('div.g-recaptcha').attr('data-sitekey');
     const captchaImg = form.find('img.captcha, img[src*="captcha"], #captcha-image');
 
     if (recaptchaSiteKey) {
       log('VFS Global: Solving reCAPTCHA...');
       const token = this.captchaSolver
-        ? await this.captchaSolver({ type: 'recaptcha', siteKey: recaptchaSiteKey, pageUrl: loginUrl })
+        ? await this.captchaSolver({
+            type: 'recaptcha',
+            siteKey: recaptchaSiteKey,
+            pageUrl: loginUrl,
+          })
         : await solveRecaptchaV2(recaptchaSiteKey, loginUrl, { apiKey: this.captchaApiKey });
       formData['g-recaptcha-response'] = token;
     } else if (captchaImg.length) {
@@ -164,7 +187,9 @@ export class VfsGlobalClient {
       log('VFS Global: Solving image captcha...');
       let imageBase64 = src;
       if (src.startsWith('http')) {
-        const imgRes = await fetch(src, { headers: { Cookie: res.headers.get('set-cookie') || '' } });
+        const imgRes = await fetch(src, {
+          headers: { Cookie: res.headers.get('set-cookie') || '' },
+        });
         const buf = await imgRes.buffer();
         imageBase64 = buf.toString('base64');
       } else if (src.startsWith('data:')) {
@@ -173,42 +198,54 @@ export class VfsGlobalClient {
       const solution = this.captchaSolver
         ? await this.captchaSolver({ type: 'image', imageBase64 })
         : await solveImageCaptcha(imageBase64, { apiKey: this.captchaApiKey });
-      const captchaInputName = form.find('input[name*="captcha"], input[name*="captcha_response"]').attr('name') || 'captcha';
+      const captchaInputName =
+        form.find('input[name*="captcha"], input[name*="captcha_response"]').attr('name') ||
+        'captcha';
       formData[captchaInputName] = solution;
     }
 
     const cookies = this._parseCookies(res.headers.get('set-cookie') || '');
-    const cookieHeader = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; ');
+    const cookieHeader = Object.entries(cookies)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('; ');
 
     const postRes = await fetch(formUrl, {
       method: method === 'get' ? 'GET' : 'POST',
       redirect: 'manual',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': cookieHeader,
-        'Referer': loginUrl
+        Cookie: cookieHeader,
+        Referer: loginUrl,
       },
-      body: method === 'get' ? null : new URLSearchParams(formData)
+      body: method === 'get' ? null : new URLSearchParams(formData),
     });
 
     const setCookie = postRes.headers.get('set-cookie') || '';
     const mergedCookies = { ...cookies, ...this._parseCookies(setCookie) };
-    const finalCookie = Object.entries(mergedCookies).map(([k, v]) => `${k}=${v}`).join('; ');
+    const finalCookie = Object.entries(mergedCookies)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('; ');
 
     // Check for login failure (e.g. wrong password or captcha)
     const location = postRes.headers.get('location') || '';
     const body = await postRes.text();
-    if (postRes.status >= 400 || (body.toLowerCase().includes('invalid') || body.toLowerCase().includes('captcha'))) {
+    if (
+      postRes.status >= 400 ||
+      body.toLowerCase().includes('invalid') ||
+      body.toLowerCase().includes('captcha')
+    ) {
       throw new Error('VFS Global login failed. Check credentials or captcha.');
     }
 
     log('VFS Global: Login successful');
     return {
-      'Cookie': finalCookie,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Referer': this.baseUri,
-      'Accept': 'application/json, text/html, */*'
+      Cookie: finalCookie,
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Referer: this.baseUri,
+      Accept: 'application/json, text/html, */*',
     };
   }
 
@@ -227,15 +264,19 @@ export class VfsGlobalClient {
       const res = await fetch(url, {
         headers: {
           ...headers,
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
       });
       if (!res.ok) return [];
       const data = await res.json();
       // Map VFS response to date strings, e.g. data.dates or data.availableDates
-      const dates = Array.isArray(data) ? data : (data.dates || data.availableDates || data.slots || []);
-      return dates.map(d => typeof d === 'string' ? d.slice(0, 10) : (d.date || d)).filter(Boolean);
+      const dates = Array.isArray(data)
+        ? data
+        : data.dates || data.availableDates || data.slots || [];
+      return dates
+        .map((d) => (typeof d === 'string' ? d.slice(0, 10) : d.date || d))
+        .filter(Boolean);
     } catch (e) {
       log(`VFS checkAvailableDate not implemented or request failed: ${e.message}`);
       return [];
@@ -249,12 +290,12 @@ export class VfsGlobalClient {
     const url = `${this.baseUri}/api/availability/times`; // placeholder
     try {
       const res = await fetch(`${url}?date=${date}`, {
-        headers: { ...headers, 'Accept': 'application/json' }
+        headers: { ...headers, Accept: 'application/json' },
       });
       if (!res.ok) return null;
       const data = await res.json();
-      const times = Array.isArray(data) ? data : (data.times || data.slots || []);
-      return times[0] ? (times[0].time || times[0]) : null;
+      const times = Array.isArray(data) ? data : data.times || data.slots || [];
+      return times[0] ? times[0].time || times[0] : null;
     } catch (e) {
       log(`VFS checkAvailableTime not implemented or failed: ${e.message}`);
       return null;
@@ -266,15 +307,17 @@ export class VfsGlobalClient {
    */
   async book(headers, scheduleId, facilityId, date, time) {
     // TODO: POST to real VFS booking endpoint with date, time, facility
-    throw new Error('VFS Global book() not yet implemented. Implement after mapping real VFS booking API.');
+    throw new Error(
+      'VFS Global book() not yet implemented. Implement after mapping real VFS booking API.'
+    );
   }
 
   _parseCookies(setCookie) {
     const out = {};
     if (!setCookie) return out;
-    setCookie.split(',').forEach(part => {
-      const [nameVal, ...rest] = part.split(';').map(s => s.trim());
-      const [name, value] = (nameVal || '').split('=').map(s => s.trim());
+    setCookie.split(',').forEach((part) => {
+      const [nameVal, ...rest] = part.split(';').map((s) => s.trim());
+      const [name, value] = (nameVal || '').split('=').map((s) => s.trim());
       if (name && value) out[name] = value;
     });
     return out;

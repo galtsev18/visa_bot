@@ -1,5 +1,11 @@
 import { getConfig, validateEnvForSheets, validateMultiUserConfig } from '../lib/config.js';
-import { initializeSheets, getInitialData, readUsers, readSettingsFromSheet, setSheetsQuotaNotifier } from '../lib/sheets.js';
+import {
+  initializeSheets,
+  getInitialData,
+  readUsers,
+  readSettingsFromSheet,
+  setSheetsQuotaNotifier,
+} from '../lib/sheets.js';
 import { initializeTelegram, sendNotification } from '../lib/telegram.js';
 import { UserBotManager } from '../lib/userBotManager.js';
 import { log, isSocketHangupError } from '../lib/utils.js';
@@ -38,9 +44,10 @@ export async function monitorCommand(options = {}) {
     log('Telegram initialized');
 
     setSheetsQuotaNotifier((event) => {
-      const msg = event === 'exceeded'
-        ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
-        : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
+      const msg =
+        event === 'exceeded'
+          ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
+          : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
       sendNotification(msg, config.telegramManagerChatId);
     });
 
@@ -59,11 +66,10 @@ export async function monitorCommand(options = {}) {
 
     log('Starting monitoring loop...');
     await manager.monitorWithRotation(cacheEntries);
-
   } catch (err) {
     if (isSocketHangupError(err)) {
       log(`Socket hangup error: ${err.message}. Trying again after ${COOLDOWN} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, COOLDOWN * 1000));
+      await new Promise((resolve) => setTimeout(resolve, COOLDOWN * 1000));
       return monitorCommand(options);
     } else {
       log(`Error: ${err.message}`);
