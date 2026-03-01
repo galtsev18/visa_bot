@@ -24,6 +24,8 @@ const TURNSTILE_INJECT_SCRIPT = `
 })();
 `;
 
+import { log } from './utils.js';
+
 /**
  * Pass Cloudflare "Just a moment..." challenge using a headless browser.
  * Optionally use 2Captcha to solve the Turnstile challenge (intercept params, get token, call callback).
@@ -45,10 +47,12 @@ export async function passCloudflareWithBrowser(url, options = {}) {
     extra.default.use(StealthPlugin());
     puppeteer = extra.default;
     useStealth = true;
-  } catch (e) {
+  } catch (err) {
+    log(`puppeteer-extra not available, using plain puppeteer: ${err.message}`);
     try {
       puppeteer = await import('puppeteer');
-    } catch (e2) {
+    } catch (err2) {
+      log(`puppeteer import failed: ${err2.message}`);
       throw new Error(
         'Puppeteer is not installed. Install with: npm install puppeteer. ' +
           'For better Cloudflare pass rate on server: npm install puppeteer-extra puppeteer-extra-plugin-stealth'
@@ -101,8 +105,9 @@ export async function passCloudflareWithBrowser(url, options = {}) {
             if (window.cfCallback) window.cfCallback(t);
           }, token);
           captchaResolve();
-        } catch (e) {
-          captchaReject(e);
+        } catch (err) {
+          log(`2Captcha Turnstile solve/apply failed: ${err.message}`);
+          captchaReject(err);
         }
       });
 
@@ -120,7 +125,8 @@ export async function passCloudflareWithBrowser(url, options = {}) {
 
       try {
         await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 25000 });
-      } catch (e) {
+      } catch (err) {
+        log(`Wait for navigation failed: ${err.message}`);
         // navigation may have already happened or timed out
       }
     } else {
@@ -148,8 +154,8 @@ export async function passCloudflareWithBrowser(url, options = {}) {
       try {
         await page.screenshot({ path: options.screenshotPath, type: 'png' });
         screenshotPath = options.screenshotPath;
-      } catch (e) {
-        // ignore screenshot errors
+      } catch (err) {
+        log(`Screenshot failed: ${err.message}`);
       }
     }
 

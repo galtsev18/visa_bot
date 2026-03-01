@@ -1,5 +1,4 @@
 import { VisaHttpClient } from '../client.js';
-import { getBaseUri } from '../config.js';
 import { PROVIDER_NAMES } from './base.js';
 
 /**

@@ -2,7 +2,6 @@ import { log, sleep, isSocketHangupError } from './utils.js';
 import { readAvailableDatesCache, updateAvailableDate } from './sheets.js';
 
 let cache = new Map(); // key: `${provider}_${date}` -> { available, times, lastChecked, validUntil }
-let cacheInitialized = false;
 
 function cacheKey(provider, date) {
   return `${(provider || 'ais').toLowerCase()}_${date}`;
@@ -31,11 +30,9 @@ export async function initializeCache(preloadedEntries) {
       });
     }
 
-    cacheInitialized = true;
     log(`Initialized cache with ${cache.size} entries`);
   } catch (error) {
     log(`Failed to initialize cache: ${error.message}`);
-    cacheInitialized = true;
   }
 }
 

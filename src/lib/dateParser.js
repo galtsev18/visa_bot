@@ -1,4 +1,5 @@
 import * as chrono from 'chrono-node';
+import { log } from './utils.js';
 
 /**
  * Parse a date string to a Date object
@@ -26,7 +27,8 @@ export function parseDate(dateStr) {
       return results[0].start.date();
     }
     return null;
-  } catch (error) {
+  } catch (err) {
+    log(`parseDate failed for "${dateStr}": ${err.message}`);
     return null;
   }
 }

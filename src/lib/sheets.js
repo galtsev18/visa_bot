@@ -481,7 +481,8 @@ export async function getInitialData() {
         if (entry.times_available) {
           try {
             entry.times_available = JSON.parse(entry.times_available);
-          } catch (e) {
+          } catch (err) {
+            log(`Parse times_available JSON failed: ${err.message}`);
             entry.times_available = [];
           }
         }
@@ -533,7 +534,8 @@ export async function readAvailableDatesCache() {
       if (entry.times_available) {
         try {
           entry.times_available = JSON.parse(entry.times_available);
-        } catch (e) {
+        } catch (err) {
+          log(`Parse times_available JSON failed: ${err.message}`);
           entry.times_available = [];
         }
       }

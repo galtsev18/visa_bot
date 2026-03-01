@@ -1,5 +1,3 @@
-import { log } from './utils.js';
-
 /**
  * Solve image captcha via 2Captcha (or compatible) API.
  * API key: options.apiKey, or CAPTCHA_2CAPTCHA_API_KEY in .env.

@@ -1,5 +1,4 @@
 import { Bot } from './bot.js';
-import { User } from './user.js';
 import { getNextUser, updateUserPriority } from './userRotation.js';
 import {
   getAvailableDates,
@@ -20,14 +19,12 @@ import {
 } from './sheets.js';
 import {
   sendNotification,
-  formatBookingSuccess,
   formatBookingSuccessWithDetails,
   formatSlotFound,
   formatBookingFailure,
   formatMonitorStarted,
 } from './telegram.js';
 import { log, sleep, formatErrorForLog } from './utils.js';
-import { getConfig } from './config.js';
 
 export class UserBotManager {
   constructor(config) {
@@ -52,8 +49,8 @@ export class UserBotManager {
     let adapterModule = null;
     try {
       adapterModule = await import('../adapters/index.js');
-    } catch {
-      // Adapters available only when running from dist (built TS)
+    } catch (err) {
+      log(`Adapters not loaded (expected when running from src): ${err.message}`);
     }
 
     for (const user of users) {

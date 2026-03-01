@@ -2,7 +2,6 @@ import { getConfig, validateEnvForSheets, validateMultiUserConfig } from '../lib
 import {
   initializeSheets,
   getInitialData,
-  readUsers,
   readSettingsFromSheet,
   setSheetsQuotaNotifier,
 } from '../lib/sheets.js';
@@ -21,8 +20,8 @@ export async function monitorCommand(options = {}) {
     let compositionModule = null;
     try {
       compositionModule = await import('../composition/createMonitorContext.js');
-    } catch {
-      // Composition root only present when built (TS compiled to dist)
+    } catch (err) {
+      log(`Composition root not loaded (expected when running from src): ${err.message}`);
     }
 
     if (compositionModule?.createMonitorContext) {

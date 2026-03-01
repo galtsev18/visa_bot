@@ -1,6 +1,5 @@
 import fetch from 'node-fetch';
 import cheerio from 'cheerio';
-import { log } from './utils.js';
 import { getBaseUri } from './config.js';
 
 const REQUEST_TIMEOUT_MS = 30 * 1000; // 30s so we get ETIMEDOUT/AbortError instead of long hang
@@ -85,7 +84,7 @@ export class VisaHttpClient {
     const timeoutMs = options.timeout ?? REQUEST_TIMEOUT_MS;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const { timeout: _t, ...rest } = options;
+    const { timeout: _timeout, ...rest } = options;
     return fetch(url, { ...rest, signal: controller.signal }).finally(() =>
       clearTimeout(timeoutId)
     );

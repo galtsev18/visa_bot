@@ -229,7 +229,6 @@ export class VfsGlobalClient {
       .join('; ');
 
     // Check for login failure (e.g. wrong password or captcha)
-    const location = postRes.headers.get('location') || '';
     const body = await postRes.text();
     if (
       postRes.status >= 400 ||
@@ -256,7 +255,7 @@ export class VfsGlobalClient {
    * @param {string|number} facilityId - center/location id
    * @returns {Promise<string[]>} YYYY-MM-DD dates
    */
-  async checkAvailableDate(headers, scheduleId, facilityId) {
+  async checkAvailableDate(headers, _scheduleId, _facilityId) {
     // TODO: Replace with real VFS endpoint and response mapping
     // Example: GET/POST to something like /api/appointments/dates?centerId=...&category=...
     const url = `${this.baseUri}/api/availability/dates`; // placeholder
@@ -286,11 +285,11 @@ export class VfsGlobalClient {
   /**
    * Get first available time for a date. VFS schema required.
    */
-  async checkAvailableTime(headers, scheduleId, facilityId, date) {
+  async checkAvailableTime(_headers, _scheduleId, _facilityId, date) {
     const url = `${this.baseUri}/api/availability/times`; // placeholder
     try {
       const res = await fetch(`${url}?date=${date}`, {
-        headers: { ...headers, Accept: 'application/json' },
+        headers: { ..._headers, Accept: 'application/json' },
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -305,7 +304,7 @@ export class VfsGlobalClient {
   /**
    * Submit booking. VFS schema required.
    */
-  async book(headers, scheduleId, facilityId, date, time) {
+  async book(_headers, _scheduleId, _facilityId, _date, _time) {
     // TODO: POST to real VFS booking endpoint with date, time, facility
     throw new Error(
       'VFS Global book() not yet implemented. Implement after mapping real VFS booking API.'
@@ -316,7 +315,7 @@ export class VfsGlobalClient {
     const out = {};
     if (!setCookie) return out;
     setCookie.split(',').forEach((part) => {
-      const [nameVal, ...rest] = part.split(';').map((s) => s.trim());
+      const [nameVal] = part.split(';').map((s) => s.trim());
       const [name, value] = (nameVal || '').split('=').map((s) => s.trim());
       if (name && value) out[name] = value;
     });
