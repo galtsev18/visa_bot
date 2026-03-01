@@ -13,7 +13,6 @@ import {
   validateEnvForSheets,
   validateMultiUserConfig,
 } from '../lib/config.js';
-import { log, formatErrorForLog } from '../lib/utils.js';
 
 export interface MonitorContext {
   config: AppConfig;
@@ -81,15 +80,7 @@ export async function createMonitorContext(
   });
   notifications.init();
 
-  repo.setQuotaNotifier((event) => {
-    const msg =
-      event === 'exceeded'
-        ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
-        : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
-    notifications.send(msg, chatId).catch((err) => {
-      log(`Failed to send quota notification: ${formatErrorForLog(err)}`);
-    });
-  });
+  // Quota notifier is registered once in monitor.js for both composition root and fallback paths
 
   const { users, cacheEntries } = await repo.getInitialData();
 
