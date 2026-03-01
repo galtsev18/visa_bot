@@ -1,0 +1,21 @@
+[Unit]
+Description=US Visa Bot (monitor multi-user)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/us-visa-bot
+ExecStart=/usr/bin/env node src/index.js monitor
+Restart=on-failure
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=us-visa-bot
+
+# Optional: load .env from project dir (Node dotenv loads it by default from cwd)
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

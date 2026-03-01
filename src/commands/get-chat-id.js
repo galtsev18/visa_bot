@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import { getConfig } from '../lib/config.js';
+import { initializeSheets, readSettingsFromSheet } from '../lib/sheets.js';
 import { log } from '../lib/utils.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
@@ -16,12 +17,32 @@ async function getUpdates(token, offset = 0, timeout = 30) {
   return data.result || [];
 }
 
+/** Try to load Telegram token from Settings sheet when not in .env */
+async function ensureTelegramConfig(config) {
+  if (config.telegramBotToken) return config;
+  if (!config.googleSheetsId || !config.googleCredentialsPath) return config;
+  try {
+    await initializeSheets(config.googleCredentialsPath, config.googleSheetsId);
+    const sheet = await readSettingsFromSheet();
+    if (sheet.telegramBotToken) {
+      config.telegramBotToken = sheet.telegramBotToken;
+      log('Using TELEGRAM_BOT_TOKEN from Settings sheet');
+    }
+  } catch (e) {
+    log(`Could not load Settings sheet: ${e.message}`);
+  }
+  return config;
+}
+
 export async function getChatIdCommand() {
   const config = getConfig();
+  // Fills config.telegramBotToken from Settings sheet if missing (mutates config in place)
+  await ensureTelegramConfig(config);
 
   if (!config.telegramBotToken) {
-    console.error('Error: TELEGRAM_BOT_TOKEN is not set in .env file');
-    console.error('Please add TELEGRAM_BOT_TOKEN=your_bot_token to your .env file');
+    console.error('Error: TELEGRAM_BOT_TOKEN is not set.');
+    console.error('Set it in .env or in the Google Sheet "Settings" tab (key: TELEGRAM_BOT_TOKEN, value: your token).');
+    console.error('Get a token from @BotFather on Telegram.');
     process.exit(1);
   }
 
@@ -34,8 +55,7 @@ export async function getChatIdCommand() {
     console.error('  - Token has extra quotes or spaces (remove them)');
     console.error('  - Token is incomplete or corrupted');
     console.error('  - Get a fresh token from @BotFather on Telegram');
-    console.error('\nYour .env file should look like:');
-    console.error('TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz');
+    console.error('\nSet TELEGRAM_BOT_TOKEN in .env or in the Settings sheet (format: 123456789:ABCdef...)');
     process.exit(1);
   }
 
@@ -60,7 +80,7 @@ export async function getChatIdCommand() {
         console.log(`\n${'='.repeat(50)}`);
         console.log(`TELEGRAM_MANAGER_CHAT_ID=${chatId}`);
         console.log(`${'='.repeat(50)}\n`);
-        log('You can now copy this value to your .env file');
+        log('Copy this value to your .env or to the Settings sheet (key: TELEGRAM_MANAGER_CHAT_ID).');
         process.exit(0);
       }
     }
@@ -92,13 +112,13 @@ export async function getChatIdCommand() {
           console.log(`\n${'='.repeat(50)}`);
           console.log(`TELEGRAM_MANAGER_CHAT_ID=${lastChatId}`);
           console.log(`${'='.repeat(50)}\n`);
-          log('You can now copy this value to your .env file');
+          log('Copy this value to your .env or to the Settings sheet (key: TELEGRAM_MANAGER_CHAT_ID).');
           log('Press Ctrl+C to exit');
         }
       } catch (err) {
         if (err.statusCode === 404) {
           console.error('\n❌ Error: Bot token is invalid or bot not found');
-          console.error('Please verify your TELEGRAM_BOT_TOKEN in .env file');
+          console.error('Verify TELEGRAM_BOT_TOKEN in .env or in the Settings sheet.');
           process.exit(1);
         }
         log(`Polling error: ${err.message}`);
@@ -110,7 +130,7 @@ export async function getChatIdCommand() {
       log('\nStopping...');
       if (lastChatId) {
         log(`\nLast chat ID found: ${lastChatId}`);
-        log('Add this to your .env file:');
+        log('Add to .env or Settings sheet:');
         console.log(`TELEGRAM_MANAGER_CHAT_ID=${lastChatId}`);
       } else {
         log('No messages received. Send a message to your bot and try again.');
@@ -125,10 +145,10 @@ export async function getChatIdCommand() {
     console.error(`\n❌ Error: ${error.message}`);
     if (error.statusCode === 404) {
       console.error('\n❌ Bot token is invalid or bot not found');
-      console.error('Verify TELEGRAM_BOT_TOKEN in .env and get a token from @BotFather');
+      console.error('Verify TELEGRAM_BOT_TOKEN in .env or Settings sheet and get a token from @BotFather');
     } else {
       console.error('\nTroubleshooting:');
-      console.error('1. Check that TELEGRAM_BOT_TOKEN is set correctly in .env');
+      console.error('1. Set TELEGRAM_BOT_TOKEN in .env or in the Settings sheet');
       console.error('2. Verify the token with @BotFather on Telegram');
       console.error('3. Make sure the bot is active and not deleted');
     }
