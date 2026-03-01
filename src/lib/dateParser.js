@@ -28,7 +28,8 @@ export function parseDate(dateStr) {
     }
     return null;
   } catch (err) {
-    log(`parseDate failed for "${dateStr}": ${err.message}`);
+    const errMsg = err?.message ?? String(err);
+    log(`parseDate failed for "${dateStr}": ${errMsg}`);
     return null;
   }
 }

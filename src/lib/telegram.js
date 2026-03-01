@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import { log } from './utils.js';
+import { log, formatErrorForLog } from './utils.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 let telegramToken = null;
@@ -44,7 +44,7 @@ export async function sendNotification(message, managerChatId) {
     log('Telegram notification sent');
     return true;
   } catch (error) {
-    log(`Failed to send Telegram notification: ${error.message}`);
+    log(`Failed to send Telegram notification: ${formatErrorForLog(error)}`);
     return false;
   }
 }

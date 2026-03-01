@@ -24,7 +24,7 @@ const TURNSTILE_INJECT_SCRIPT = `
 })();
 `;
 
-import { log } from './utils.js';
+import { log, formatErrorForLog } from './utils.js';
 
 /**
  * Pass Cloudflare "Just a moment..." challenge using a headless browser.
@@ -48,11 +48,11 @@ export async function passCloudflareWithBrowser(url, options = {}) {
     puppeteer = extra.default;
     useStealth = true;
   } catch (err) {
-    log(`puppeteer-extra not available, using plain puppeteer: ${err.message}`);
+    log(`puppeteer-extra not available, using plain puppeteer: ${formatErrorForLog(err)}`);
     try {
       puppeteer = await import('puppeteer');
     } catch (err2) {
-      log(`puppeteer import failed: ${err2.message}`);
+      log(`puppeteer import failed: ${formatErrorForLog(err2)}`);
       throw new Error(
         'Puppeteer is not installed. Install with: npm install puppeteer. ' +
           'For better Cloudflare pass rate on server: npm install puppeteer-extra puppeteer-extra-plugin-stealth'
@@ -106,7 +106,7 @@ export async function passCloudflareWithBrowser(url, options = {}) {
           }, token);
           captchaResolve();
         } catch (err) {
-          log(`2Captcha Turnstile solve/apply failed: ${err.message}`);
+          log(`2Captcha Turnstile solve/apply failed: ${formatErrorForLog(err)}`);
           captchaReject(err);
         }
       });
@@ -119,14 +119,14 @@ export async function passCloudflareWithBrowser(url, options = {}) {
           new Promise((_, rej) => setTimeout(() => rej(new Error('NO_PARAMS')), 15000)),
         ]);
       } catch (e) {
-        if (e.message !== 'NO_PARAMS') throw e;
+        if ((e?.message ?? '') !== 'NO_PARAMS') throw e;
         // No Turnstile params intercepted in time; continue with current page
       }
 
       try {
         await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 25000 });
       } catch (err) {
-        log(`Wait for navigation failed: ${err.message}`);
+        log(`Wait for navigation failed: ${formatErrorForLog(err)}`);
         // navigation may have already happened or timed out
       }
     } else {
@@ -155,7 +155,7 @@ export async function passCloudflareWithBrowser(url, options = {}) {
         await page.screenshot({ path: options.screenshotPath, type: 'png' });
         screenshotPath = options.screenshotPath;
       } catch (err) {
-        log(`Screenshot failed: ${err.message}`);
+        log(`Screenshot failed: ${formatErrorForLog(err)}`);
       }
     }
 

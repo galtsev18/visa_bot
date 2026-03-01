@@ -1,7 +1,7 @@
 import fetch from 'node-fetch';
 import { getConfig } from '../lib/config.js';
 import { initializeSheets, readSettingsFromSheet } from '../lib/sheets.js';
-import { log } from '../lib/utils.js';
+import { log, formatErrorForLog } from '../lib/utils.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -29,7 +29,7 @@ async function ensureTelegramConfig(config) {
       log('Using TELEGRAM_BOT_TOKEN from Settings sheet');
     }
   } catch (e) {
-    log(`Could not load Settings sheet: ${e.message}`);
+    log(`Could not load Settings sheet: ${formatErrorForLog(e)}`);
   }
   return config;
 }
@@ -129,7 +129,7 @@ export async function getChatIdCommand() {
           console.error('Verify TELEGRAM_BOT_TOKEN in .env or in the Settings sheet.');
           process.exit(1);
         }
-        log(`Polling error: ${err.message}`);
+        log(`Polling error: ${formatErrorForLog(err)}`);
       }
       setTimeout(poll, 500);
     };
@@ -150,7 +150,7 @@ export async function getChatIdCommand() {
     process.on('SIGTERM', onExit);
     poll();
   } catch (error) {
-    console.error(`\n❌ Error: ${error.message}`);
+    console.error(`\n❌ Error: ${formatErrorForLog(error)}`);
     if (error.statusCode === 404) {
       console.error('\n❌ Bot token is invalid or bot not found');
       console.error(

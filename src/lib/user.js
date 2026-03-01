@@ -1,4 +1,5 @@
 import { parseDateRanges, isDateInRanges, formatDate } from './dateParser.js';
+import { formatErrorForLog } from './utils.js';
 
 export class User {
   constructor(data) {
@@ -25,7 +26,7 @@ export class User {
           typeof data.date_ranges === 'string' ? JSON.parse(data.date_ranges) : data.date_ranges;
         dateRanges = parseDateRanges(rangesJson);
       } catch (e) {
-        console.error(`Failed to parse date ranges for user ${this.email}:`, e);
+        console.error(`Failed to parse date ranges for user ${this.email}:`, formatErrorForLog(e));
       }
     }
     this.dateRanges = dateRanges;

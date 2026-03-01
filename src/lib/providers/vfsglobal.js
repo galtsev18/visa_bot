@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import cheerio from 'cheerio';
-import { log } from '../utils.js';
+import { log, formatErrorForLog } from '../utils.js';
 import { solveImageCaptcha, solveRecaptchaV2, solveTurnstile } from '../captcha.js';
 
 const VFS_BASE_URI = 'https://visa.vfsglobal.com';
@@ -277,7 +277,7 @@ export class VfsGlobalClient {
         .map((d) => (typeof d === 'string' ? d.slice(0, 10) : d.date || d))
         .filter(Boolean);
     } catch (e) {
-      log(`VFS checkAvailableDate not implemented or request failed: ${e.message}`);
+      log(`VFS checkAvailableDate not implemented or request failed: ${formatErrorForLog(e)}`);
       return [];
     }
   }
@@ -296,7 +296,7 @@ export class VfsGlobalClient {
       const times = Array.isArray(data) ? data : data.times || data.slots || [];
       return times[0] ? times[0].time || times[0] : null;
     } catch (e) {
-      log(`VFS checkAvailableTime not implemented or failed: ${e.message}`);
+      log(`VFS checkAvailableTime not implemented or failed: ${formatErrorForLog(e)}`);
       return null;
     }
   }

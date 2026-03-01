@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { log, sleep } from './utils.js';
+import { log, sleep, formatErrorForLog } from './utils.js';
 import { User } from './user.js';
 
 let sheets = null;
@@ -139,7 +139,7 @@ export async function initializeSheets(credentialsPath, sheetId) {
     await ensureHeaders();
     return true;
   }).catch((error) => {
-    log(`Failed to initialize Google Sheets: ${error.message}`);
+    log(`Failed to initialize Google Sheets: ${formatErrorForLog(error)}`);
     throw error;
   });
 }
@@ -246,7 +246,7 @@ async function ensureHeaders() {
         'Required sheets: 1. "Users"  2. "Available Dates Cache"  3. "Booking Attempts Log"  4. "Settings"'
       );
     } else {
-      log(`⚠️  Warning: Failed to ensure headers: ${error.message}`);
+      log(`⚠️  Warning: Failed to ensure headers: ${formatErrorForLog(error)}`);
     }
   }
 }
@@ -367,7 +367,7 @@ export async function readSettingsFromSheet() {
     }
     return overrides;
   }).catch((error) => {
-    log(`Failed to read Settings sheet: ${error.message}`);
+    log(`Failed to read Settings sheet: ${formatErrorForLog(error)}`);
     return {};
   });
 }
@@ -411,7 +411,7 @@ export async function readUsers() {
           users.push(user);
           emailToRowIndex.set(user.email, oneBasedRow);
         } catch (error) {
-          log(`Failed to parse user ${userData.email}: ${error.message}`);
+          log(`Failed to parse user ${userData.email}: ${formatErrorForLog(error)}`);
         }
       }
     }
@@ -419,7 +419,7 @@ export async function readUsers() {
     log(`Read ${users.length} active users from Google Sheets`);
     return users;
   }).catch((error) => {
-    log(`Failed to read users from Google Sheets: ${error.message}`);
+    log(`Failed to read users from Google Sheets: ${formatErrorForLog(error)}`);
     throw error;
   });
 }
@@ -462,7 +462,7 @@ export async function getInitialData() {
           users.push(user);
           emailToRowIndex.set(user.email, oneBasedRow);
         } catch (err) {
-          log(`Failed to parse user ${userData.email}: ${err.message}`);
+          log(`Failed to parse user ${userData.email}: ${formatErrorForLog(err)}`);
         }
       }
     }
@@ -482,7 +482,7 @@ export async function getInitialData() {
           try {
             entry.times_available = JSON.parse(entry.times_available);
           } catch (err) {
-            log(`Parse times_available JSON failed: ${err.message}`);
+            log(`Parse times_available JSON failed: ${formatErrorForLog(err)}`);
             entry.times_available = [];
           }
         }
@@ -495,7 +495,7 @@ export async function getInitialData() {
     log(`Initial data: ${users.length} users, ${cacheEntries.length} cache entries (1 batch read)`);
     return { users, cacheEntries };
   }).catch((error) => {
-    log(`Failed to get initial data: ${error.message}`);
+    log(`Failed to get initial data: ${formatErrorForLog(error)}`);
     throw error;
   });
 }
@@ -535,7 +535,7 @@ export async function readAvailableDatesCache() {
         try {
           entry.times_available = JSON.parse(entry.times_available);
         } catch (err) {
-          log(`Parse times_available JSON failed: ${err.message}`);
+          log(`Parse times_available JSON failed: ${formatErrorForLog(err)}`);
           entry.times_available = [];
         }
       }
@@ -553,7 +553,7 @@ export async function readAvailableDatesCache() {
     log(`Read ${cache.length} cache entries from Google Sheets`);
     return cache;
   }).catch((error) => {
-    log(`Failed to read cache from Google Sheets: ${error.message}`);
+    log(`Failed to read cache from Google Sheets: ${formatErrorForLog(error)}`);
     return [];
   });
 }
@@ -618,7 +618,7 @@ export async function updateAvailableDate(date, available, times = [], facilityI
 
     log(`Updated cache for date ${date}: available=${available}`);
   }).catch((error) => {
-    log(`Failed to update cache for date ${date}: ${error.message}`);
+    log(`Failed to update cache for date ${date}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -647,7 +647,7 @@ export async function logBookingAttempt(attempt) {
 
     log(`Logged booking attempt: ${attempt.user_email} - ${attempt.result}`);
   }).catch((error) => {
-    log(`Failed to log booking attempt: ${error.message}`);
+    log(`Failed to log booking attempt: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -676,7 +676,7 @@ async function getColumnIndex(headerName) {
     }
     return -1;
   } catch (error) {
-    log(`Failed to get column index for ${headerName}: ${error.message}`);
+    log(`Failed to get column index for ${headerName}: ${formatErrorForLog(error)}`);
     return -1;
   }
 }
@@ -729,7 +729,7 @@ export async function updateUserLastChecked(email, timestamp, rowIndex) {
       });
     }
   }).catch((error) => {
-    log(`Failed to update last_checked for ${email}: ${error.message}`);
+    log(`Failed to update last_checked for ${email}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -784,7 +784,7 @@ export async function updateUserCurrentDate(email, newDate, timeSlot = null, row
       });
     }
   }).catch((error) => {
-    log(`Failed to update current_date for ${email}: ${error.message}`);
+    log(`Failed to update current_date for ${email}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -839,7 +839,7 @@ export async function updateUserLastBooked(email, date, timeSlot = null, rowInde
       });
     }
   }).catch((error) => {
-    log(`Failed to update last_booked for ${email}: ${error.message}`);
+    log(`Failed to update last_booked for ${email}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -891,6 +891,6 @@ export async function updateUserPriority(email, priority, rowIndex) {
       });
     }
   }).catch((error) => {
-    log(`Failed to update priority for ${email}: ${error.message}`);
+    log(`Failed to update priority for ${email}: ${formatErrorForLog(error)}`);
   });
 }

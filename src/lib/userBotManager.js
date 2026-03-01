@@ -53,7 +53,7 @@ export class UserBotManager {
     try {
       adapterModule = await import('../adapters/index.js');
     } catch (err) {
-      log(`Adapters not loaded (expected when running from src): ${err.message}`);
+      log(`Adapters not loaded (expected when running from src): ${formatErrorForLog(err)}`);
     }
 
     for (const user of users) {
@@ -176,7 +176,7 @@ export class UserBotManager {
             this.lastSheetsRefresh = now;
             log(`Refreshed users: ${freshUsers.length} active users`);
           } catch (error) {
-            log(`Failed to refresh users: ${error.message}`);
+            log(`Failed to refresh users: ${formatErrorForLog(error)}`);
           }
         }
 
@@ -221,7 +221,7 @@ export class UserBotManager {
         // Sleep before next iteration
         await sleep(this.config.refreshInterval);
       } catch (error) {
-        log(`Error in monitoring loop: ${error.message}`);
+        log(`Error in monitoring loop: ${formatErrorForLog(error)}`);
         await sleep(this.config.refreshInterval);
       }
     }

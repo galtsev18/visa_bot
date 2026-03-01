@@ -6,7 +6,7 @@ import {
   logBookingAttempt,
   updateAvailableDate,
 } from '../lib/sheets.js';
-import { log } from '../lib/utils.js';
+import { log, formatErrorForLog } from '../lib/utils.js';
 
 export async function testSheetsCommand() {
   const config = getConfig();
@@ -33,7 +33,7 @@ export async function testSheetsCommand() {
         log('   ⚠️  No active users found (make sure "active" column is set to TRUE)');
       }
     } catch (error) {
-      log(`❌ Failed to read Users sheet: ${error.message}`);
+      log(`❌ Failed to read Users sheet: ${formatErrorForLog(error)}`);
       throw error;
     }
 
@@ -44,7 +44,7 @@ export async function testSheetsCommand() {
       log(`✅ Successfully read Cache sheet`);
       log(`   Found ${cache.length} cache entry/entries`);
     } catch (error) {
-      log(`❌ Failed to read Cache sheet: ${error.message}`);
+      log(`❌ Failed to read Cache sheet: ${formatErrorForLog(error)}`);
       throw error;
     }
 
@@ -56,7 +56,7 @@ export async function testSheetsCommand() {
       log(`✅ Successfully wrote test entry to Cache sheet`);
       log(`   Test date: ${testDate} (you can delete this later)`);
     } catch (error) {
-      log(`❌ Failed to write to Cache sheet: ${error.message}`);
+      log(`❌ Failed to write to Cache sheet: ${formatErrorForLog(error)}`);
       throw error;
     }
 
@@ -74,7 +74,7 @@ export async function testSheetsCommand() {
       log(`✅ Successfully wrote test entry to Logs sheet`);
       log(`   Test entry added (you can delete this later)`);
     } catch (error) {
-      log(`❌ Failed to write to Logs sheet: ${error.message}`);
+      log(`❌ Failed to write to Logs sheet: ${formatErrorForLog(error)}`);
       throw error;
     }
 
@@ -90,7 +90,7 @@ export async function testSheetsCommand() {
     log('\n' + '='.repeat(60));
     log('❌ TEST FAILED');
     log('='.repeat(60));
-    log(`\nError: ${error.message}`);
+    log(`\nError: ${formatErrorForLog(error)}`);
 
     // Show full error details if available
     if (error.response) {
@@ -108,15 +108,16 @@ export async function testSheetsCommand() {
     }
 
     // Specific error handling
-    if (error.message.includes('credentials') || error.message.includes('ENOENT')) {
+    const errMsg = error?.message ?? '';
+    if (errMsg.includes('credentials') || errMsg.includes('ENOENT')) {
       log('\n🔧 Troubleshooting - Credentials:');
       log('1. Check that GOOGLE_CREDENTIALS_PATH points to a valid JSON file');
       log(`   Current path: ${config.googleCredentialsPath}`);
       log('2. Verify the service account JSON file is correct');
       log('3. Make sure the file exists at the specified path');
     } else if (
-      error.message.includes('spreadsheet') ||
-      error.message.includes('404') ||
+      errMsg.includes('spreadsheet') ||
+      errMsg.includes('404') ||
       error.response?.status === 404
     ) {
       log('\n🔧 Troubleshooting - Spreadsheet Not Found:');
@@ -128,8 +129,8 @@ export async function testSheetsCommand() {
       log('4. Make sure the service account email has Editor access');
       log('   (Share the spreadsheet with the service account email)');
     } else if (
-      error.message.includes('permission') ||
-      error.message.includes('403') ||
+      errMsg.includes('permission') ||
+      errMsg.includes('403') ||
       error.response?.status === 403
     ) {
       log('\n🔧 Troubleshooting - Permission Denied:');
@@ -138,7 +139,7 @@ export async function testSheetsCommand() {
       log('3. The service account email is in your credentials.json file');
       log('   (look for "client_email" field)');
       log('4. Make sure you clicked "Send" after sharing');
-    } else if (error.message.includes('Unable to parse range') || error.message.includes('sheet')) {
+    } else if (errMsg.includes('Unable to parse range') || errMsg.includes('sheet')) {
       log('\n🔧 Troubleshooting - Sheet Not Found:');
       log('1. Make sure you have created these sheets in your spreadsheet:');
       log('   - "Users"');

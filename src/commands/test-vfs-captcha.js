@@ -3,7 +3,7 @@ import cheerio from 'cheerio';
 import { getConfig } from '../lib/config.js';
 import { solveImageCaptcha, solveRecaptchaV2, solveTurnstile } from '../lib/captcha.js';
 import { passCloudflareWithBrowser } from '../lib/browserCloudflare.js';
-import { log } from '../lib/utils.js';
+import { log, formatErrorForLog } from '../lib/utils.js';
 
 const VFS_LOGIN_URL = 'https://visa.vfsglobal.com/rus/en/fra/login';
 
@@ -73,7 +73,7 @@ export async function testVfsCaptchaCommand(options = {}) {
         log(`Browser loaded. Page title: ${result.title}`);
       }
     } catch (err) {
-      console.error('Browser failed:', err.message);
+      console.error('Browser failed:', formatErrorForLog(err));
       process.exit(1);
     }
   } else {
@@ -91,7 +91,7 @@ export async function testVfsCaptchaCommand(options = {}) {
       html = await res.text();
       resUrl = res.url;
     } catch (err) {
-      console.error('Fetch failed:', err.message);
+      console.error('Fetch failed:', formatErrorForLog(err));
       process.exit(1);
     }
   }
@@ -235,7 +235,7 @@ export async function testVfsCaptchaCommand(options = {}) {
         captchaInfo.solution = solution;
       }
     } catch (err) {
-      console.error('Solve failed:', err.message);
+      console.error('Solve failed:', formatErrorForLog(err));
       if (!captchaApiKey) {
         console.error('Set CAPTCHA_2CAPTCHA_API_KEY in .env or in Settings sheet to use --solve');
       }
@@ -280,7 +280,7 @@ export async function testVfsCaptchaCommand(options = {}) {
         );
       }
     } catch (e) {
-      console.log('Turnstile submit failed:', e.message);
+      console.log('Turnstile submit failed:', formatErrorForLog(e));
     }
   }
 

@@ -1,4 +1,4 @@
-import { log, sleep, isSocketHangupError } from './utils.js';
+import { log, sleep, isSocketHangupError, formatErrorForLog } from './utils.js';
 import { readAvailableDatesCache, updateAvailableDate } from './sheets.js';
 
 let cache = new Map(); // key: `${provider}_${date}` -> { available, times, lastChecked, validUntil }
@@ -32,7 +32,7 @@ export async function initializeCache(preloadedEntries) {
 
     log(`Initialized cache with ${cache.size} entries`);
   } catch (error) {
-    log(`Failed to initialize cache: ${error.message}`);
+    log(`Failed to initialize cache: ${formatErrorForLog(error)}`);
   }
 }
 
@@ -125,7 +125,7 @@ export function updateDate(date, available, times = [], ttl = 60, provider = 'ai
   });
 
   updateAvailableDate(date, available, times).catch((err) => {
-    log(`Failed to update cache in Sheets for ${date}: ${err.message}`);
+    log(`Failed to update cache in Sheets for ${date}: ${formatErrorForLog(err)}`);
   });
 }
 
@@ -216,12 +216,12 @@ export async function refreshDate(
       try {
         return await tryFetch();
       } catch (retryErr) {
-        log(`Failed to refresh date ${date} (after retry): ${retryErr.message}`);
+        log(`Failed to refresh date ${date} (after retry): ${formatErrorForLog(retryErr)}`);
         updateDate(date, false, [], ttl, provider);
         return { available: false, times: [] };
       }
     }
-    log(`Failed to refresh date ${date}: ${error.message}`);
+    log(`Failed to refresh date ${date}: ${formatErrorForLog(error)}`);
     updateDate(date, false, [], ttl, provider);
     return { available: false, times: [] };
   }
@@ -297,7 +297,7 @@ export async function refreshAllDates(
     log(`Refreshed cache: ${availableDates.length} dates available`);
     return availableDates;
   } catch (error) {
-    log(`Failed to refresh all dates: ${error.message}`);
+    log(`Failed to refresh all dates: ${formatErrorForLog(error)}`);
     return [];
   }
 }
