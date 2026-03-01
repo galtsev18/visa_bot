@@ -13,7 +13,7 @@ import {
   validateEnvForSheets,
   validateMultiUserConfig,
 } from '../lib/config.js';
-import { log } from '../lib/utils.js';
+import { log, formatErrorForLog } from '../lib/utils.js';
 
 export interface MonitorContext {
   config: AppConfig;
@@ -87,7 +87,7 @@ export async function createMonitorContext(
         ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
         : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
     notifications.send(msg, chatId).catch((err) => {
-      log(`Failed to send quota notification: ${err.message}`);
+      log(`Failed to send quota notification: ${formatErrorForLog(err)}`);
     });
   });
 

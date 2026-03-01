@@ -12,6 +12,7 @@ export interface VisaProviderFactoryOptions {
 /**
  * Returns a VisaProvider for the given provider id.
  * Use this in Bot/BookingService instead of hardcoding VisaHttpClient.
+ * @throws Error if providerId is not supported
  */
 export function createVisaProvider(
   providerId: string,
@@ -24,5 +25,8 @@ export function createVisaProvider(
       captchaSolver: options.captchaSolver ?? undefined,
     });
   }
-  return new AisProvider();
+  if (id === 'ais') {
+    return new AisProvider();
+  }
+  throw new Error(`Unknown visa provider: ${providerId}. Supported: ais, vfsglobal.`);
 }
