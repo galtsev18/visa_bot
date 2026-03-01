@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 
 import { program } from 'commander';
+import { formatErrorForLog } from './lib/utils.js';
 import { botCommand } from './commands/bot.js';
 import { monitorCommand } from './commands/monitor.js';
 import { getChatIdCommand } from './commands/get-chat-id.js';
 import { testSheetsCommand } from './commands/test-sheets.js';
 import { testVfsCaptchaCommand } from './commands/test-vfs-captcha.js';
+
+// CLI boundary: avoid raw stack dumps for unhandled rejections
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', formatErrorForLog(reason));
+  process.exit(1);
+});
 
 program
   .name('us-visa-bot')
@@ -57,4 +64,7 @@ program
   .option('--dry-run', 'only log what would be booked without actually booking')
   .action(botCommand);
 
-program.parse();
+program.parseAsync().catch((err) => {
+  console.error('Command failed:', formatErrorForLog(err));
+  process.exit(1);
+});

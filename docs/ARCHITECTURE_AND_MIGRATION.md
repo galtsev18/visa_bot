@@ -192,6 +192,7 @@ src/
 - **UserBotManager** — тонкий оркестратор: собирает зависимости и вызывает сценарии + ротацию.
 - **Фаза 4:** Домен (User, userRotation) без импортов из адаптеров; добавлены юнит-тесты домена (Node.js `node:test`).
 - **Composition root** (`src/composition/createMonitorContext.ts`): при запуске из `dist` (после `npm run build`) команда monitor использует адаптеры (SheetsUserRepository, TelegramNotificationAdapter, EnvConfigProvider). Кэш дат инициализируется в цикле через `initializeCache(cacheEntries)` из lib/dateCache.js.
+- **Обработка ошибок (подход к Фазе 5):** Во всех `catch` и `.catch()` вместо прямого доступа к `error.message` используется `formatErrorForLog(err)` из `src/lib/utils.js` (или безопасный вариант `err?.message ?? String(err)`). Это исключает падения при не-Error значениях и унифицирует вывод в логах. VisaProviderFactory при неизвестном `providerId` выбрасывает явную ошибку вместо тихого fallback на AIS.
 
 ### Фаза 0: Подготовка (без смены поведения)
 1. **Добавить TypeScript** в проект (tsconfig, компиляция или ts-node): сначала разрешить .ts рядом с .js, переносить по одному модулю.

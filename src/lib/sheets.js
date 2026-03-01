@@ -685,7 +685,7 @@ async function getColumnIndex(headerName) {
  * Update user's last checked timestamp
  * @param {string} email - User email
  * @param {Date} timestamp - Timestamp
- * @param {number} [rowIndex] - 1-based row (skips read when provided or from cache)
+ * @param {number|null|undefined} [rowIndex] - 1-based row (skips read when provided or from cache)
  */
 export async function updateUserLastChecked(email, timestamp, rowIndex) {
   return withQuotaRetry(async () => {
@@ -738,7 +738,7 @@ export async function updateUserLastChecked(email, timestamp, rowIndex) {
  * @param {string} email - User email
  * @param {string} newDate - New date (YYYY-MM-DD)
  * @param {string|null|undefined} [timeSlot] - Optional time e.g. "09:00"
- * @param {number} [rowIndex] - 1-based row (skips read when provided or from cache)
+ * @param {number|null|undefined} [rowIndex] - 1-based row (skips read when provided or from cache)
  */
 export async function updateUserCurrentDate(email, newDate, timeSlot = null, rowIndex) {
   return withQuotaRetry(async () => {
@@ -793,7 +793,7 @@ export async function updateUserCurrentDate(email, newDate, timeSlot = null, row
  * @param {string} email - User email
  * @param {string} date - Booked date (YYYY-MM-DD)
  * @param {string|null|undefined} [timeSlot] - Optional time e.g. "09:00"
- * @param {number} [rowIndex] - 1-based row (skips read when provided or from cache)
+ * @param {number|null|undefined} [rowIndex] - 1-based row (skips read when provided or from cache)
  */
 export async function updateUserLastBooked(email, date, timeSlot = null, rowIndex) {
   return withQuotaRetry(async () => {
@@ -847,7 +847,7 @@ export async function updateUserLastBooked(email, date, timeSlot = null, rowInde
  * Update user's priority
  * @param {string} email - User email
  * @param {number} priority - Priority value
- * @param {number} [rowIndex] - 1-based row (skips read when provided or from cache)
+ * @param {number|null|undefined} [rowIndex] - 1-based row (skips read when provided or from cache)
  */
 export async function updateUserPriority(email, priority, rowIndex) {
   return withQuotaRetry(async () => {

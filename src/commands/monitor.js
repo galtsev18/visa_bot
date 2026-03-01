@@ -37,6 +37,19 @@ export async function monitorCommand(options = {}) {
       users = ctx.users;
       cacheEntries = ctx.cacheEntries;
       log('Monitor started via composition root (adapters).');
+
+      // Ensure global Telegram is initialized for UserBotManager's sendNotification calls
+      initializeTelegram(config.telegramBotToken, config.telegramManagerChatId);
+      // Register quota notifier so quota exceeded/resolved alerts are sent (same as fallback path)
+      setSheetsQuotaNotifier((event) => {
+        const msg =
+          event === 'exceeded'
+            ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
+            : '✅ <b>Google Sheets quota restored</b>. Operations resumed.';
+        sendNotification(msg, config.telegramManagerChatId).catch((err) => {
+          log(`Failed to send quota notification: ${formatErrorForLog(err)}`);
+        });
+      });
     } else {
       config = getConfig();
       validateEnvForSheets(config);

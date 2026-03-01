@@ -50,7 +50,7 @@ export class SheetsUserRepository implements UserRepository {
     timestamp: Date,
     rowIndex?: number | null
   ): Promise<void> {
-    await sheets.updateUserLastChecked(email, timestamp, rowIndex ?? undefined);
+    await sheets.updateUserLastChecked(email, timestamp, rowIndex);
   }
 
   async updateUserCurrentDate(
@@ -59,12 +59,7 @@ export class SheetsUserRepository implements UserRepository {
     timeSlot?: string | null,
     rowIndex?: number | null
   ): Promise<void> {
-    await sheets.updateUserCurrentDate(
-      email,
-      newDate,
-      timeSlot ?? null,
-      rowIndex ?? undefined
-    );
+    await sheets.updateUserCurrentDate(email, newDate, timeSlot, rowIndex);
   }
 
   async updateUserLastBooked(
@@ -73,12 +68,7 @@ export class SheetsUserRepository implements UserRepository {
     timeSlot?: string | null,
     rowIndex?: number | null
   ): Promise<void> {
-    await sheets.updateUserLastBooked(
-      email,
-      date,
-      timeSlot ?? null,
-      rowIndex ?? undefined
-    );
+    await sheets.updateUserLastBooked(email, date, timeSlot, rowIndex);
   }
 
   async updateUserPriority(
@@ -86,7 +76,7 @@ export class SheetsUserRepository implements UserRepository {
     priority: number,
     rowIndex?: number | null
   ): Promise<void> {
-    await sheets.updateUserPriority(email, priority, rowIndex ?? undefined);
+    await sheets.updateUserPriority(email, priority, rowIndex);
   }
 
   async logBookingAttempt(attempt: BookingAttemptLog): Promise<void> {
