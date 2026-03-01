@@ -2,8 +2,17 @@
  * Use case: check a user for an available date using shared cache.
  * Refreshes cache when stale, filters by user's date validity, returns earliest valid date or null.
  *
- * @param {Object} user - User with email, provider, scheduleId, isDateValid()
- * @param {Object} deps - Dependencies: bot, sessionHeaders, config, getAvailableDates, isCacheStale, refreshAllDates, isDateAvailable, log
+ * @param {{ email: string; provider?: string; scheduleId: string; isDateValid: (date: string) => boolean }} user
+ * @param {{
+ *   bot: { client: { checkAvailableDate: Function; checkAvailableTime: Function } } | null;
+ *   sessionHeaders: Record<string, unknown> | null;
+ *   config: { cacheTtl: number; facilityId: number; aisRequestDelaySec?: number; aisRateLimitBackoffSec?: number };
+ *   getAvailableDates: (provider: string) => string[];
+ *   isCacheStale: (date: string, ttl: number, provider: string) => boolean;
+ *   refreshAllDates: (client: unknown, headers: unknown, scheduleId: string, facilityId: number, ttl: number, provider: string, opts?: unknown) => Promise<string[]>;
+ *   isDateAvailable: (date: string, provider: string) => boolean;
+ *   log: (msg: string) => void;
+ * }} deps
  * @returns {Promise<string|null>} - YYYY-MM-DD or null
  */
 export async function checkUserWithCache(user, deps) {

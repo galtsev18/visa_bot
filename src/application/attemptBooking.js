@@ -1,11 +1,21 @@
 /**
  * Use case: attempt to book an appointment for a user on a given date.
  * On success: updates user state, sheets, logs attempt, sends Telegram notification.
- * On failure: logs attempt, sends failure notification.
  *
- * @param {Object} user - User object (mutated on success: currentDate, lastBooked)
+ * @param {{ email: string; currentDate: string | null; lastBooked: string | null; rowIndex?: number | null }} user - Mutated on success
  * @param {string} date - YYYY-MM-DD to book
- * @param {Object} deps - Dependencies: bot, sessionHeaders, config, updateUserCurrentDate, updateUserLastBooked, logBookingAttempt, sendNotification, formatBookingSuccessWithDetails, formatBookingFailure, log
+ * @param {{
+ *   bot: { bookAppointment: (headers: unknown, date: string) => Promise<{ success: boolean; time?: string } | null> } | null;
+ *   sessionHeaders: Record<string, unknown> | null;
+ *   config: { telegramManagerChatId?: string };
+ *   updateUserCurrentDate: (email: string, date: string, timeSlot: string | null, rowIndex?: number | null) => Promise<void>;
+ *   updateUserLastBooked: (email: string, date: string, timeSlot: string | null, rowIndex?: number | null) => Promise<void>;
+ *   logBookingAttempt: (attempt: { user_email: string; date_attempted: string | null; result: string; reason?: string }) => Promise<void>;
+ *   sendNotification: (msg: string, chatId: string) => Promise<unknown>;
+ *   formatBookingSuccessWithDetails: (user: unknown, oldDate: string, newDate: string, timeSlot: string | null) => string;
+ *   formatBookingFailure: (user: unknown, date: string, reason: string) => string;
+ *   log: (msg: string) => void;
+ * }} deps
  * @returns {Promise<boolean>} - true if booked successfully
  */
 export async function attemptBooking(user, date, deps) {

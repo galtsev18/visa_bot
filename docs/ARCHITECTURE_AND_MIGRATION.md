@@ -52,6 +52,7 @@ src/
     ├── sheets.js         # Google Sheets: Users, Cache, Logs, Settings, квоты
     ├── telegram.js       # Инициализация + sendNotification
     ├── utils.js          # sleep, log (→ logger.info), formatErrorForLog, isSocketHangupError
+    ├── fallbackAdapters.js  # JS-обёртки над lib для пути без composition root (П.10)
     ├── captcha.js        # 2Captcha
     ├── browserCloudflare.js
     └── providers/
@@ -86,7 +87,7 @@ src/
 - Валидация дат: раньше текущей записи, в диапазонах, не раньше (today + reaction_time).
 - Букинг: слоты → выбор времени → форма; уведомления об успехе/ошибке.
 - Уведомления в Telegram (успех, слот, ошибка, старт монитора, квоты Sheets).
-- Поддержка нескольких провайдеров (AIS; VFS в заделе).
+- Поддержка нескольких провайдеров (AIS, VFS): при `user.provider === 'vfsglobal'` фабрика возвращает VfsGlobalProviderAdapter; для работы VFS нужен запуск из dist (`npm run build && node dist/index.js monitor`), т.к. адаптеры подгружаются из dist.
 - Single-user режим (legacy): один пользователь из .env, целевая/минимальная дата.
 
 ### 2.2 Настройки
@@ -186,7 +187,7 @@ src/
 - ESLint, Prettier, TypeScript в проекте. Контракты в `ports/` (AppConfig, ConfigProvider, DateCache, NotificationSender, UserRepository, VisaProvider, User) с JSDoc/TSDoc и @implemented_by.
 
 **Фаза 1 (выполнена)**  
-- Порты DateCache, NotificationSender, Config описаны; адаптеры DateCacheAdapter, TelegramNotificationAdapter, EnvConfigProvider. При запуске через composition root UserBotManager получает `repo`, `dateCache`, `notifications` и ведёт вызовы через интерфейсы; fallback-путь по-прежнему использует lib.
+- Порты и адаптеры. При composition root UserBotManager получает адаптеры из контекста; при fallback — из `createFallbackAdapters()` (lib/fallbackAdapters.js), так что вызовы везде идут через интерфейсы (П.10).
 
 **Фаза 2 (выполнена)**  
 - UserRepository (полный порт), SheetsUserRepository. VisaProviderFactory: AIS и VFS (vfsglobal). Composition root возвращает `repo`, `dateCache`, `notifications`; в monitor передаются в UserBotManager.
@@ -195,7 +196,7 @@ src/
 - Use cases в `src/application/`: `startMonitor.js`, `checkUserWithCache.js`, `attemptBooking.js`. UserBotManager — тонкий оркестратор: зависимости + сценарии + ротация.
 
 **Фаза 4 (выполнена)**  
-- Домен (User, userRotation) без импортов из адаптеров. Юнит-тесты домена (Node.js `node:test`).
+- Домен без импортов из адаптеров. Юнит-тесты домена и сценариев (startMonitor, checkUserWithCache, attemptBooking) с моками портов (П.12). CI: `.github/workflows/ci.yml` (lint, typecheck, test). Типизация: JSDoc в application/. VFS: при `user.provider === 'vfsglobal'` фабрика отдаёт VfsGlobalProviderAdapter; для VFS нужен запуск из dist.
 
 **Фаза 5 (выполнена)**  
 - Логирование (pino, `LOG_LEVEL`); обработка ошибок на границе CLI; health-команда и метрики (checksTotal, bookingsTotal в файле, вывод в health).

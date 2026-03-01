@@ -5,7 +5,9 @@ import {
   readSettingsFromSheet,
   setSheetsQuotaNotifier,
 } from '../lib/sheets.js';
+import { initializeCache } from '../lib/dateCache.js';
 import { initializeTelegram, sendNotification } from '../lib/telegram.js';
+import { createFallbackAdapters } from '../lib/fallbackAdapters.js';
 import { UserBotManager } from '../lib/userBotManager.js';
 import { logger } from '../lib/logger.js';
 import { log, isSocketHangupError, formatErrorForLog } from '../lib/utils.js';
@@ -85,6 +87,9 @@ export async function monitorCommand(options = {}) {
       const data = await getInitialData();
       users = data.users;
       cacheEntries = data.cacheEntries;
+      await initializeCache(cacheEntries);
+      managerDeps = createFallbackAdapters();
+      log('Monitor started via fallback (lib adapters).');
     }
 
     log('Initializing multi-user monitoring system...');
@@ -100,7 +105,7 @@ export async function monitorCommand(options = {}) {
 
     log(`Found ${users.length} active users`);
 
-    const manager = new UserBotManager(config, managerDeps ?? {});
+    const manager = new UserBotManager(config, managerDeps);
     await manager.initializeUsers(users);
 
     log('Starting monitoring loop...');

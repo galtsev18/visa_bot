@@ -9,7 +9,7 @@
     "start:dist": "node dist/index.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/domain/user.test.js test/domain/userRotation.test.js",
+    "test": "node --test test/domain/user.test.js test/domain/userRotation.test.js test/application/startMonitor.test.js test/application/checkUserWithCache.test.js test/application/attemptBooking.test.js",
     "lint": "eslint src eslint.config.js --ext .js,.ts",
     "lint:fix": "eslint src --ext .js,.ts --fix",
     "format": "prettier --write \"src/**/*.{js,ts,json,md}\"",
