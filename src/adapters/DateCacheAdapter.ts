@@ -5,23 +5,48 @@ import type {
 } from '../ports/DateCache.js';
 import * as dateCacheLib from '../lib/dateCache.js';
 
+/** Backend API for date cache (createDateCache() return value or global lib). */
+export interface DateCacheBackend {
+  initializeCache(preloadedEntries?: unknown): Promise<void>;
+  getAvailableDates(provider: string): string[];
+  isDateAvailable(date: string, provider: string): boolean;
+  isCacheStale(date: string, ttl: number, provider: string): boolean;
+  getCacheStats(): ReturnType<DateCache['getCacheStats']>;
+  updateDate(date: string, available: boolean, times: string[], ttl: number, provider: string): void;
+  refreshAllDates(
+    client: unknown,
+    headers: unknown,
+    scheduleId: string,
+    facilityId: number,
+    ttl: number,
+    provider: string,
+    options?: RefreshDatesOptions
+  ): Promise<string[]>;
+}
+
 /**
- * Adapter: wraps existing dateCache.js to implement DateCache port.
- * Keeps current behavior (in-memory + Sheets persistence via sheets.updateAvailableDate).
+ * Adapter: implements DateCache port.
+ * When backend is provided (from composition root), uses that instance; otherwise uses global lib/dateCache.
  */
 export class DateCacheAdapter implements DateCache {
+  private readonly backend: DateCacheBackend;
+
+  constructor(backend?: DateCacheBackend) {
+    this.backend = backend ?? (dateCacheLib as unknown as DateCacheBackend);
+  }
+
   async initialize(
     preloadedEntries?: Parameters<DateCache['initialize']>[0]
   ): Promise<void> {
-    await dateCacheLib.initializeCache(preloadedEntries);
+    await this.backend.initializeCache(preloadedEntries);
   }
 
   getAvailableDates(provider?: string): string[] {
-    return dateCacheLib.getAvailableDates(provider ?? 'ais');
+    return this.backend.getAvailableDates(provider ?? 'ais');
   }
 
   isDateAvailable(date: string, provider?: string): boolean {
-    return dateCacheLib.isDateAvailable(date, provider ?? 'ais');
+    return this.backend.isDateAvailable(date, provider ?? 'ais');
   }
 
   isCacheStale(
@@ -29,11 +54,11 @@ export class DateCacheAdapter implements DateCache {
     ttlSeconds: number,
     provider?: string
   ): boolean {
-    return dateCacheLib.isCacheStale(date, ttlSeconds, provider ?? 'ais');
+    return this.backend.isCacheStale(date, ttlSeconds, provider ?? 'ais');
   }
 
   getCacheStats(): ReturnType<DateCache['getCacheStats']> {
-    return dateCacheLib.getCacheStats();
+    return this.backend.getCacheStats();
   }
 
   updateDate(
@@ -43,7 +68,7 @@ export class DateCacheAdapter implements DateCache {
     ttlSeconds?: number,
     provider?: string
   ): void {
-    dateCacheLib.updateDate(date, available, times ?? [], ttlSeconds ?? 60, provider ?? 'ais');
+    this.backend.updateDate(date, available, times ?? [], ttlSeconds ?? 60, provider ?? 'ais');
   }
 
   async refreshAllDates(
@@ -55,9 +80,9 @@ export class DateCacheAdapter implements DateCache {
     provider?: string,
     options?: RefreshDatesOptions
   ): Promise<string[]> {
-    return dateCacheLib.refreshAllDates(
-      client as Parameters<typeof dateCacheLib.refreshAllDates>[0],
-      sessionHeaders as Parameters<typeof dateCacheLib.refreshAllDates>[1],
+    return this.backend.refreshAllDates(
+      client,
+      sessionHeaders,
       scheduleId,
       facilityId,
       ttlSeconds,

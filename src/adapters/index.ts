@@ -3,7 +3,7 @@
  */
 
 export { DateCacheAdapter } from './DateCacheAdapter.js';
-export { EnvConfigProvider } from './EnvConfigProvider.js';
+export { EnvConfigProvider, MergedConfigProvider } from './EnvConfigProvider.js';
 export { ProviderBackedClient } from './ProviderBackedClient.js';
 export { SheetsUserRepository } from './SheetsUserRepository.js';
 export { TelegramNotificationAdapter } from './TelegramNotificationAdapter.js';

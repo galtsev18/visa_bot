@@ -22,17 +22,17 @@
 
 ## Средний приоритет
 
-### 3. Устранение глобального состояния в lib
+### 3. Устранение глобального состояния в lib — частично выполнено
 
-- **Проблема:** в `lib/sheets.js`, `lib/dateCache.js`, `lib/telegram.js` — модульные `let` (sheets, cache, bot). Параллельный запуск двух инстансов или изолированные тесты невозможны; адаптеры могут опираться на то же глобальное состояние.
-- **План:** перевести lib на инстанцируемые фасады: например, `createSheetsClient(credentials, spreadsheetId)` возвращает объект с методами и состоянием в замыкании; адаптеры получают экземпляр из composition root. Аналогично — кэш дат и Telegram-клиент как зависимости, создаваемые в корне композиции.
-- **Связано:** TECH_DEBT § 1 (глобальное состояние); ROADMAP (интеграционные тесты).
+- **Проблема:** в `lib/sheets.js`, `lib/dateCache.js`, `lib/telegram.js` — модульные `let` (sheets, cache, bot).
+- **Сделано:** для кэша дат добавлен фасад `createDateCache()` в `lib/dateCache.js` (собственный Map и опция `persist`); в composition root создаётся экземпляр с `repo.updateAvailableDate` и передаётся в `DateCacheAdapter`. Глобальный кэш по-прежнему используется командами без composition root (например, bot). Sheets и Telegram пока с глобальным состоянием.
+- **Связано:** TECH_DEBT § 1 (глобальное состояние).
 
-### 4. Единый источник конфигурации
+### 4. Единый источник конфигурации — выполнено
 
-- **Проблема:** конфиг собирается из env (config.js) и листа Settings в разных местах (createMonitorContext, fallback в monitor.js); нет единого контракта «источник конфига» с приоритетами.
-- **План:** ввести порт ConfigProvider с методом `getConfig(): Promise<AppConfig>`, где реализация сама читает env и при необходимости Settings и возвращает объединённый конфиг. Use cases и CLI не зависят от листа Settings напрямую.
-- **Связано:** TECH_DEBT § 1 (конфиг из двух источников); CONTRACTS.md, EnvConfigProvider.
+- **Проблема:** конфиг собирался из env и листа Settings в разных местах.
+- **Сделано:** порт ConfigProvider с `getConfig(): Promise<AppConfig>`; добавлен `MergedConfigProvider(envProvider, repo)`, который при getConfig() инициализирует repo, читает Settings и возвращает объединённый конфиг. В порт UserRepository добавлен метод `initialize`. Команда monitor получает конфиг только через MergedConfigProvider.
+- **Связано:** CONTRACTS.md, EnvConfigProvider.
 
 ---
 
@@ -72,8 +72,8 @@
 
 - [x] Один путь запуска monitor (composition root; fallback удалён)
 - [x] UserBotManager принимает только обязательные deps (repo, dateCache, notifications)
-- [ ] Устранение глобального состояния в lib (инстанцируемые фасады, DI из composition root)
-- [ ] ConfigProvider возвращает объединённый AppConfig (env + Settings)
+- [x] Устранение глобального состояния в lib для dateCache (createDateCache + DI в DateCacheAdapter); sheets/telegram — в планах
+- [x] ConfigProvider возвращает объединённый AppConfig (env + Settings через MergedConfigProvider)
 - [ ] В ARCHITECTURE и README описан рекомендуемый способ запуска и необходимость сборки для VFS
 - [ ] В TESTING.md добавлен сценарий интеграционного теста monitor с моками портов
 - [ ] В ARCHITECTURE или ADR описано поведение при перезапуске и границы многопроцессного запуска

@@ -10,9 +10,12 @@ import type { UserRepository } from '../ports/UserRepository.js';
 import type { DateCache } from '../ports/DateCache.js';
 import type { NotificationSender } from '../ports/NotificationSender.js';
 import { EnvConfigProvider } from '../adapters/EnvConfigProvider.js';
+import { MergedConfigProvider } from '../adapters/EnvConfigProvider.js';
 import { SheetsUserRepository } from '../adapters/SheetsUserRepository.js';
 import { TelegramNotificationAdapter } from '../adapters/TelegramNotificationAdapter.js';
 import { DateCacheAdapter } from '../adapters/DateCacheAdapter.js';
+import type { DateCacheBackend } from '../adapters/DateCacheAdapter.js';
+import { createDateCache } from '../lib/dateCache.js';
 import {
   validateEnvForSheets,
   validateMultiUserConfig,
@@ -57,28 +60,20 @@ export interface CreateMonitorContextOptions {
 }
 
 /**
- * Build config (env + sheet overrides), initialize repo and Telegram;
- * return config and initial data for the monitor loop (cache is initialized in the loop).
+ * Build config (env + Settings via MergedConfigProvider), then create adapters;
+ * return config and initial data for the monitor loop.
  */
 export async function createMonitorContext(
   options: CreateMonitorContextOptions = {}
 ): Promise<MonitorContext> {
-  const configProvider = new EnvConfigProvider();
-  let config = configProvider.getConfig();
+  const envProvider = new EnvConfigProvider();
+  const repo = new SheetsUserRepository();
+  const configProvider = new MergedConfigProvider(envProvider, repo);
+  const config = await configProvider.getConfig();
 
   validateEnvForSheets(config as Parameters<typeof validateEnvForSheets>[0]);
-
-  const repo = new SheetsUserRepository();
-  await repo.initialize(
-    config.googleCredentialsPath!,
-    config.googleSheetsId!
-  );
-
-  const sheetOverrides = await repo.getSettingsOverrides();
-  config = { ...config, ...sheetOverrides } as AppConfig;
   if (options.refreshInterval != null) config.refreshInterval = options.refreshInterval;
   if (options.sheetsRefresh != null) config.sheetsRefreshInterval = options.sheetsRefresh;
-
   validateMultiUserConfig(config as Parameters<typeof validateMultiUserConfig>[0]);
 
   const chatId = String(config.telegramManagerChatId ?? '').trim();
@@ -88,11 +83,13 @@ export async function createMonitorContext(
   });
   notifications.init();
 
-  // Quota notifier is registered once in monitor.js for both composition root and fallback paths
-
   const { users, cacheEntries } = await repo.getInitialData();
 
-  const dateCache = new DateCacheAdapter();
+  const dateCacheBackend = createDateCache({
+    persist: (date, available, times, facilityId) =>
+      repo.updateAvailableDate(date, available, times ?? [], facilityId ?? 134),
+  }) as DateCacheBackend;
+  const dateCache = new DateCacheAdapter(dateCacheBackend);
   await dateCache.initialize(
     cacheEntries as Parameters<DateCache['initialize']>[0]
   );

@@ -37,6 +37,9 @@ export interface BookingAttemptLog {
  * @implemented_by SheetsUserRepository (adapters)
  */
 export interface UserRepository {
+  /** Connect to storage (e.g. Google Sheets). Call once before other methods. */
+  initialize(credentialsPath: string, sheetId: string): Promise<void>;
+
   getActiveUsers(): Promise<User[]>;
 
   getSettingsOverrides(): Promise<SettingsOverrides>;

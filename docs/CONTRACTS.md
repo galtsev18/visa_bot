@@ -50,6 +50,7 @@
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|----------|
+| `initialize` | `initialize(credentialsPath, sheetId): Promise<void>` | Подключиться к хранилищу (например, Google Sheets). Вызывать один раз до остальных методов. |
 | `getActiveUsers` | `getActiveUsers(): Promise<User[]>` | Список активных пользователей (active === true). |
 | `getSettingsOverrides` | `getSettingsOverrides(): Promise<SettingsOverrides>` | Переопределения из листа Settings. |
 | `getInitialData` | `getInitialData(): Promise<{ users, cacheEntries }>` | Один батч: пользователи + записи кэша дат для инициализации. |
@@ -89,7 +90,7 @@
 | `updateDate` | `updateDate(date, available, times?, ttlSeconds?, provider?): void` | Обновить одну запись (in-memory + при необходимости persist). |
 | `refreshAllDates` | `refreshAllDates(client, sessionHeaders, scheduleId, facilityId, ttlSeconds, provider?, options?): Promise<string[]>` | Запросить даты у провайдера через client и обновить кэш; вернуть список дат. |
 
-**Реализация:** `DateCacheAdapter` (обёртка над lib/dateCache.js).
+**Реализация:** `DateCacheAdapter` (при запуске через composition root получает экземпляр из `createDateCache()` в lib/dateCache.js с опцией persist; иначе использует глобальный lib/dateCache).
 
 ---
 
@@ -111,7 +112,7 @@
 
 ## 5. ConfigProvider
 
-**Назначение:** предоставление конфигурации приложения (env + переопределения из Settings).
+**Назначение:** предоставление конфигурации приложения (env и при необходимости переопределения из Settings).
 
 **Файл:** `src/ports/ConfigProvider.ts`
 
@@ -123,9 +124,9 @@
 
 | Метод | Сигнатура | Описание |
 |-------|-----------|----------|
-| `getConfig` | `getConfig(): AppConfig` | Текущая конфигурация (синхронно). Валидация может выполняться внутри или в composition root. |
+| `getConfig` | `getConfig(): Promise<AppConfig>` | Текущая конфигурация. Реализация может объединять env и лист Settings (MergedConfigProvider). Валидация — внутри или в composition root. |
 
-**Реализация:** `EnvConfigProvider`.
+**Реализации:** `EnvConfigProvider` (только env); `MergedConfigProvider` (env + Settings через UserRepository, инициализирует repo при первом вызове getConfig).
 
 ---
 

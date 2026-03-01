@@ -1,10 +1,10 @@
 import type { AppConfig } from './AppConfig.js';
 
 /**
- * Port: provide application config (env + optional overrides).
- * Validation can happen inside getConfig() or at composition root.
- * @implemented_by EnvConfigProvider (adapters)
+ * Port: provide application config (env + optional overrides from storage).
+ * Implementations may merge env with Settings sheet or other sources.
+ * @implemented_by EnvConfigProvider, MergedConfigProvider (adapters)
  */
 export interface ConfigProvider {
-  getConfig(): AppConfig;
+  getConfig(): Promise<AppConfig>;
 }

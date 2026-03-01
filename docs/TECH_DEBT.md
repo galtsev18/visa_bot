@@ -10,9 +10,9 @@
 |----------|-----|--------|
 | Дублирование AIS-пути | client.js vs providers/ais | Частично решено: при composition root используется провайдер. |
 | Единый провайдер | Bot, UserBotManager | Решено: фабрика и ProviderBackedClient. |
-| Глобальное состояние | sheets.js, dateCache.js, telegram.js | Актуально: `let` в модулях. |
+| Глобальное состояние | sheets.js, dateCache.js, telegram.js | Частично решено: dateCache — createDateCache() + экземпляр в composition root; sheets/telegram — актуально. |
 | Смешение слоёв | UserBotManager при отсутствии deps | Решено: один путь через composition root; deps обязательны. |
-| Конфиг из двух источников | config.js + Settings | Актуально. |
+| Конфиг из двух источников | config.js + Settings | Решено: MergedConfigProvider, getConfig(): Promise<AppConfig>. |
 | Типизация | lib, commands — JS | Частично решено: порты и application — TS. |
 | Дублирование в Sheets | sheets.js | Частично решено: порт UserRepository есть. |
 | Жёсткая связь с Sheets | UserBotManager | Решено на уровне порта. |
