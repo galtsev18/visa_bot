@@ -5,6 +5,7 @@ import { botCommand } from './commands/bot.js';
 import { monitorCommand } from './commands/monitor.js';
 import { getChatIdCommand } from './commands/get-chat-id.js';
 import { testSheetsCommand } from './commands/test-sheets.js';
+import { testVfsCaptchaCommand } from './commands/test-vfs-captcha.js';
 
 program
   .name('us-visa-bot')
@@ -30,6 +31,18 @@ program
   .command('test-sheets')
   .description('Test Google Sheets read/write access')
   .action(testSheetsCommand);
+
+// Utility command to test VFS Global captcha detection and solving
+program
+  .command('test-vfs-captcha')
+  .description('Test VFS login page: detect captcha type and optionally solve it')
+  .option('--browser', 'Use browser (Puppeteer) to try to pass Cloudflare')
+  .option('--visible', 'Show browser window (use with --browser; Cloudflare may pass more often)')
+  .option('--screenshot [path]', 'Save screenshot of rendered page (use with --browser); default: vfs-page-screenshot.png')
+  .option('--solve', 'Solve captcha via 2Captcha (requires CAPTCHA_2CAPTCHA_API_KEY)')
+  .option('--email <email>', 'Email for login attempt (use with --solve and --password)')
+  .option('--password <password>', 'Password for login attempt')
+  .action(testVfsCaptchaCommand);
 
 // Single-user command (backward compatibility)
 program

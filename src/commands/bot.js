@@ -36,9 +36,9 @@ export async function botCommand(options) {
       );
 
       if (availableDate) {
-        const booked = await bot.bookAppointment(sessionHeaders, availableDate);
+        const result = await bot.bookAppointment(sessionHeaders, availableDate);
 
-        if (booked) {
+        if (result && result.success) {
           // Update current date to the new available date
           currentBookedDate = availableDate;
 

@@ -1,12 +1,10 @@
-import { getConfig, validateMultiUserConfig } from '../lib/config.js';
+import { getConfig, validateEnvForSheets } from '../lib/config.js';
 import { initializeSheets, readUsers, readAvailableDatesCache, logBookingAttempt, updateAvailableDate } from '../lib/sheets.js';
 import { log } from '../lib/utils.js';
 
 export async function testSheetsCommand() {
   const config = getConfig();
-  
-  // Validate config
-  validateMultiUserConfig(config);
+  validateEnvForSheets(config);
 
   log('Starting Google Sheets connectivity test...');
   log('='.repeat(60));

@@ -6,18 +6,20 @@ import {
   isDateAvailable, 
   isCacheStale, 
   refreshAllDates,
-  initializeCache 
+  initializeCache,
+  getCacheStats 
 } from './dateCache.js';
 import { 
   readUsers,
+  readSettingsFromSheet,
   updateUserLastChecked, 
   updateUserCurrentDate, 
   updateUserLastBooked,
   updateUserPriority as updateUserPriorityInSheets,
   logBookingAttempt 
 } from './sheets.js';
-import { sendNotification, formatBookingSuccess, formatBookingSuccessWithDetails, formatSlotFound, formatBookingFailure } from './telegram.js';
-import { log, sleep } from './utils.js';
+import { sendNotification, formatBookingSuccess, formatBookingSuccessWithDetails, formatSlotFound, formatBookingFailure, formatMonitorStarted } from './telegram.js';
+import { log, sleep, formatErrorForLog } from './utils.js';
 import { getConfig } from './config.js';
 
 export class UserBotManager {
@@ -48,7 +50,10 @@ export class UserBotManager {
           countryCode: user.countryCode,
           scheduleId: user.scheduleId,
           facilityId: this.config.facilityId,
-          refreshDelay: this.config.refreshInterval
+          refreshDelay: this.config.refreshInterval,
+          provider: user.provider || 'ais',
+          captchaSolver: this.config.captchaSolver || null,
+          captchaApiKey: this.config.captcha2CaptchaApiKey || null
         };
 
         const bot = new Bot(botConfig);
@@ -59,7 +64,7 @@ export class UserBotManager {
 
         log(`Initialized bot for user ${user.email}`);
       } catch (error) {
-        log(`Failed to initialize bot for user ${user.email}: ${error.message}`);
+        log(`Failed to initialize bot for user ${user.email}: ${formatErrorForLog(error)}`);
       }
     }
 
@@ -76,25 +81,34 @@ export class UserBotManager {
     const sessionHeaders = this.sessions.get(user.email);
 
     if (!bot || !sessionHeaders) {
-      log(`Bot or session not found for user ${user.email}`);
+      const parts = [];
+      if (!bot) parts.push('bot not initialized');
+      if (!sessionHeaders) parts.push('session not initialized (not logged in)');
+      log(`User ${user.email}: ${parts.join(', ')} — skipping date check (login may have failed at startup)`);
       return null;
     }
 
     // Check if cache needs refresh
-    const availableDates = getAvailableDates();
-    
-    if (availableDates.length === 0 || availableDates.some(date => isCacheStale(date, this.config.cacheTtl))) {
-      log(`Refreshing date cache for user ${user.email}...`);
+    const provider = user.provider || 'ais';
+    const availableDates = getAvailableDates(provider);
+
+    if (availableDates.length === 0 || availableDates.some(date => isCacheStale(date, this.config.cacheTtl, provider))) {
+      log(`Refreshing date cache for user ${user.email} (${provider})...`);
       try {
         await refreshAllDates(
           bot.client,
           sessionHeaders,
           user.scheduleId,
           this.config.facilityId,
-          this.config.cacheTtl
+          this.config.cacheTtl,
+          provider,
+          {
+            requestDelaySec: this.config.aisRequestDelaySec,
+            rateLimitBackoffSec: this.config.aisRateLimitBackoffSec
+          }
         );
-        // Re-get available dates after refresh
-        const refreshedDates = getAvailableDates();
+        const refreshedDates = getAvailableDates(provider);
+        availableDates.length = 0;
         availableDates.push(...refreshedDates);
       } catch (error) {
         log(`Failed to refresh cache: ${error.message}`);
@@ -106,7 +120,7 @@ export class UserBotManager {
       if (!user.isDateValid(date)) {
         return false;
       }
-      return isDateAvailable(date);
+      return isDateAvailable(date, provider);
     });
 
     if (validDates.length === 0) {
@@ -133,12 +147,17 @@ export class UserBotManager {
     const sessionHeaders = this.sessions.get(user.email);
 
     if (!bot || !sessionHeaders) {
+      const parts = [];
+      if (!bot) parts.push('bot not initialized');
+      if (!sessionHeaders) parts.push('session not initialized (not logged in)');
+      const reason = `Cannot book: ${parts.join(', ')} for ${user.email} (login may have failed at startup)`;
       await logBookingAttempt({
         user_email: user.email,
         date_attempted: date,
         result: 'failure',
-        reason: 'Bot or session not found'
+        reason
       });
+      log(`User ${user.email}: ${reason}`);
       return false;
     }
 
@@ -173,17 +192,19 @@ export class UserBotManager {
     user.currentDate = newDate;
     user.lastBooked = newDate;
 
-    // Update in Sheets
+    // Update in Sheets (with time so spreadsheet shows date and time)
     await Promise.all([
-      updateUserCurrentDate(user.email, newDate),
-      updateUserLastBooked(user.email, newDate),
+      updateUserCurrentDate(user.email, newDate, timeSlot, user.rowIndex),
+      updateUserLastBooked(user.email, newDate, timeSlot, user.rowIndex),
       logBookingAttempt({
         user_email: user.email,
         date_attempted: newDate,
+        time_attempted: timeSlot,
         result: 'success',
         reason: 'Appointment booked successfully',
         old_date: oldDate,
-        new_date: newDate
+        new_date: newDate,
+        new_time: timeSlot
       })
     ]);
 
@@ -215,12 +236,17 @@ export class UserBotManager {
 
   /**
    * Main monitoring loop with rotation
+   * @param {Array} [initialCacheEntries] - Preloaded cache entries from getInitialData (avoids 1 read)
    */
-  async monitorWithRotation() {
+  async monitorWithRotation(initialCacheEntries) {
     log('Starting monitoring loop with rotation...');
 
-    // Initialize cache
-    await initializeCache();
+    await initializeCache(initialCacheEntries);
+
+    // Notify manager that monitor started (pool size, cache stats, settings)
+    const cacheStats = getCacheStats();
+    const startedMsg = formatMonitorStarted(this.users, this.config, cacheStats);
+    await sendNotification(startedMsg, this.config.telegramManagerChatId);
 
     while (true) {
       try {
@@ -228,10 +254,15 @@ export class UserBotManager {
         const now = new Date();
         if (!this.lastSheetsRefresh || 
             (now - this.lastSheetsRefresh) / 1000 > this.config.sheetsRefreshInterval) {
-          log('Refreshing users from Google Sheets...');
+          log('Refreshing users and settings from Google Sheets...');
           try {
-            const freshUsers = await readUsers();
-            // Re-initialize bots for new/updated users
+            const [sheetSettings, freshUsers] = await Promise.all([
+              readSettingsFromSheet(),
+              readUsers()
+            ]);
+            delete sheetSettings.googleSheetsId;
+            delete sheetSettings.googleCredentialsPath;
+            Object.assign(this.config, sheetSettings);
             await this.initializeUsers(freshUsers);
             this.lastSheetsRefresh = now;
             log(`Refreshed users: ${freshUsers.length} active users`);
@@ -274,8 +305,8 @@ export class UserBotManager {
         const checkedAt = new Date();
         updateUserPriority(user, checkedAt);
         await Promise.all([
-          updateUserLastChecked(user.email, checkedAt),
-          updateUserPriorityInSheets(user.email, user.priority)
+          updateUserLastChecked(user.email, checkedAt, user.rowIndex),
+          updateUserPriorityInSheets(user.email, user.priority, user.rowIndex)
         ]);
 
         // Sleep before next iteration

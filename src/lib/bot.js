@@ -9,7 +9,6 @@ export class Bot {
   }
 
   async initialize() {
-    log('Initializing visa bot...');
     return await this.client.login();
   }
 

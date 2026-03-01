@@ -6,13 +6,17 @@ export class User {
     this.password = data.password;
     this.countryCode = data.country_code;
     this.scheduleId = data.schedule_id;
-    this.currentDate = data.current_date; // YYYY-MM-DD string
+    // Sheet may store "YYYY-MM-DD HH:mm"; we keep date only for logic
+    this.currentDate = (data.current_date || '').toString().trim().slice(0, 10) || null;
     this.reactionTime = Number(data.reaction_time) || 0; // days
     this.active = data.active === true || data.active === 'true' || data.active === 'TRUE';
     this.lastChecked = data.last_checked ? new Date(data.last_checked) : null;
-    this.lastBooked = data.last_booked || null;
+    this.lastBooked = (data.last_booked || '').toString().trim().slice(0, 10) || null;
     this.priority = Number(data.priority) || 0;
-    
+    this.provider = (data.provider || 'ais').toLowerCase();
+    /** 1-based row index in Users sheet (set by readUsers to avoid extra API reads) */
+    this.rowIndex = data.rowIndex != null ? Number(data.rowIndex) : null;
+
     // Parse date ranges from JSON string
     let dateRanges = [];
     if (data.date_ranges) {

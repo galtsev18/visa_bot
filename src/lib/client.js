@@ -3,6 +3,8 @@ import cheerio from 'cheerio';
 import { log } from './utils.js';
 import { getBaseUri } from './config.js';
 
+const REQUEST_TIMEOUT_MS = 30 * 1000; // 30s so we get ETIMEDOUT/AbortError instead of long hang
+
 // Common headers
 const COMMON_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
@@ -20,8 +22,6 @@ export class VisaHttpClient {
 
   // Public API methods
   async login() {
-    log('Logging in');
-
     const anonymousHeaders = await this._anonymousRequest(`${this.baseUri}/users/sign_in`)
       .then(response => this._extractHeaders(response));
 
@@ -77,8 +77,16 @@ export class VisaHttpClient {
   }
 
   // Private request methods
+  _fetchWithTimeout(url, options = {}) {
+    const timeoutMs = options.timeout ?? REQUEST_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const { timeout: _t, ...rest } = options;
+    return fetch(url, { ...rest, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+  }
+
   async _anonymousRequest(url, headers = {}) {
-    return fetch(url, {
+    return this._fetchWithTimeout(url, {
       headers: {
         "User-Agent": "",
         "Accept": "*/*",
@@ -90,7 +98,7 @@ export class VisaHttpClient {
   }
 
   async _jsonRequest(url, headers = {}) {
-    return fetch(url, {
+    return this._fetchWithTimeout(url, {
       headers: {
         ...headers,
         "Accept": "application/json",
@@ -103,7 +111,7 @@ export class VisaHttpClient {
   }
 
   async _submitForm(url, headers = {}, formData = {}) {
-    return fetch(url, {
+    return this._fetchWithTimeout(url, {
       method: "POST",
       headers: {
         ...headers,
@@ -114,7 +122,7 @@ export class VisaHttpClient {
   }
 
   async _submitFormWithRedirect(url, headers = {}, formData = {}) {
-    return fetch(url, {
+    return this._fetchWithTimeout(url, {
       method: "POST",
       redirect: "follow",
       headers: {
