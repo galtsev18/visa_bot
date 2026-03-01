@@ -61,7 +61,7 @@ export function getAvailableDates(provider = 'ais') {
  * @param {string} date - Date (YYYY-MM-DD)
  * @param {string} [provider='ais']
  */
-function isDateCached(date, provider = 'ais') {
+function _isDateCached(date, provider = 'ais') {
   return cache.has(cacheKey(provider, date));
 }
 
@@ -83,7 +83,7 @@ export function isDateAvailable(date, provider = 'ais') {
  * @param {string} date - Date (YYYY-MM-DD)
  * @param {string} [provider='ais']
  */
-function getAvailableTimes(date, provider = 'ais') {
+function _getAvailableTimes(date, provider = 'ais') {
   const entry = cache.get(cacheKey(provider, date));
   if (!entry) return [];
   const now = new Date();
@@ -135,7 +135,7 @@ export function updateDate(date, available, times = [], ttl = 60, provider = 'ai
  * @param {string} [provider='ais']
  * @returns {Array<string>}
  */
-function getStaleDates(ttl = 60, provider = 'ais') {
+function _getStaleDates(ttl = 60, provider = 'ais') {
   const prefix = `${(provider || 'ais').toLowerCase()}_`;
   const staleDates = [];
   const now = new Date();

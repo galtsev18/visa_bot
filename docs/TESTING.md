@@ -59,3 +59,19 @@
 
 - Текущая политика: не обязательны, в [ROADMAP.md](ROADMAP.md) указаны как возможное улучшение.
 - При введении интеграционных тестов: использовать тестовую таблицу Google Sheets и/или тестовый Telegram-бот / заглушки; не хранить секреты в репозитории; явно помечать такие тесты (например, `test:integration` или отдельная папка `test/integration/`).
+
+### Целевой сценарий: интеграционный тест команды monitor
+
+После перехода на обязательные deps и один путь инициализации (composition root) возможен следующий сценарий:
+
+1. **Объект теста:** один цикл работы монитора без реальных внешних сервисов: от вызова `createMonitorContext` с подменённым хранилищем/конфигом до одной итерации `UserBotManager.monitorWithRotation` (или от команды `monitor` до первого цикла с моками).
+
+2. **Подмена портов:** все зависимости передаются извне и могут быть моками:
+   - **UserRepository** — мок с `getInitialData()`, `getActiveUsers()`, `getSettingsOverrides()`, `updateUserLastChecked`, `updateUserPriority`, `logBookingAttempt` и т.д.; возвращает фиксированный список пользователей и записей кэша.
+   - **DateCache** — мок или экземпляр из `createDateCache()` с пустым или предзаполненным состоянием.
+   - **NotificationSender** — мок, проверяющий факт и текст отправленных сообщений.
+   - **VisaProvider** (через Bot/ProviderBackedClient) — мок, возвращающий заданные даты или ошибку.
+
+3. **Проверки:** вызов `createMonitorContext` с моком репозитория (или фабрикой, возвращающей мок после «инициализации»); создание `UserBotManager(config, { repo, dateCache, notifications })`; один проход цикла (например, вызов `checkUserWithCache` и при наличии даты — `attemptBooking`); проверка вызовов моков (обновление lastChecked, отправка уведомления и т.д.).
+
+4. **Реализация:** тест может вызывать `createMonitorContext` с кастомным ConfigProvider и UserRepository (например, класс-заглушка, реализующий порт и возвращающий тестовые данные), либо собирать контекст вручную (config + моки repo/dateCache/notifications) и передавать в UserBotManager, затем выполнять один шаг цикла. Рекомендуется отдельный файл `test/integration/monitor-one-cycle.test.js` (или `.ts`) и скрипт `npm run test:integration` при появлении таких тестов.

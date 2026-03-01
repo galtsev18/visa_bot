@@ -22,5 +22,4 @@
 
 ## 2. Неиспользуемый код
 
-- **composition/index.ts** — barrel не импортируется (используется только `createMonitorContext.js`).
-- **lib/dateCache.js** — функции `isDateCached`, `getAvailableTimes`, `getStaleDates` не экспортируются (внутренние).
+- **lib/dateCache.js** — функции `_isDateCached`, `_getAvailableTimes`, `_getStaleDates` не экспортируются (внутренние, префикс _ для линта).

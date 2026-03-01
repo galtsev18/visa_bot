@@ -32,8 +32,7 @@ src/
 │   └── test-vfs-captcha.js
 ├── composition/
 │   ├── createMonitorContext.ts # Composition root: адаптеры + конфиг для monitor
-│   ├── createMonitorContext.js # Реэкспорт из .ts (запуск из src через tsx)
-│   └── index.ts                # Barrel (не используется при импорте)
+│   └── createMonitorContext.js # Реэкспорт из .ts (запуск из src через tsx)
 ├── application/                # Use cases (TypeScript)
 │   ├── startMonitor.ts
 │   ├── checkUserWithCache.ts
@@ -82,7 +81,10 @@ src/
 
 Исходники в `src` не импортируют из `dist`.
 
-**Рекомендуемый запуск:** для разработки — `npm run dev` (tsx загружает composition root из src); для продакшена и VFS — `npm run build && npm start` (сборка в `dist/`). Команда `monitor` всегда инициализируется через composition root; UserBotManager получает обязательные зависимости (repo, dateCache, notifications) из него.
+**Рекомендуемый способ запуска:**
+- **Разработка:** `npm run dev` — запуск из `src` через tsx; composition root и адаптеры подгружаются из исходников. Подходит для команд monitor, bot, test-sheets и т.д.
+- **Продакшен и VFS:** `npm run build && npm start` — сборка в `dist/`, запуск из `dist/index.js`. Для провайдера **VFS Global** сборка обязательна: адаптеры (в т.ч. VfsGlobalProviderAdapter) подгружаются из скомпилированного кода. Без сборки при `user.provider === 'vfsglobal'` возможны ошибки загрузки модулей.
+- Команда `monitor` всегда инициализируется через composition root; UserBotManager получает обязательные зависимости (repo, dateCache, notifications) из него.
 
 ---
 
@@ -109,5 +111,13 @@ Adapters (Sheets, EnvConfig, DateCacheAdapter, Telegram, AIS/VFS)
 - **VisaProvider:** `login`, `getAvailableDates`, `getAvailableTime`, `book`. Реализации: AIS (lib + ProviderBackedClient), VFS (VfsGlobalProviderAdapter).
 - **UserRepository:** `getActiveUsers`, `getSettingsOverrides`, `getInitialData`, обновления и лог попыток. Реализация: SheetsUserRepository.
 - **DateCache:** по провайдеру: `getAvailableDates`, `isDateAvailable`, `isCacheStale`, `initialize`, `updateDate`, `refreshAllDates`, `getCacheStats`. Реализация: DateCacheAdapter (обёртка над lib/dateCache.js).
-- **ConfigProvider:** `getConfig(): AppConfig`. Реализация: EnvConfigProvider.
+- **ConfigProvider:** `getConfig(): Promise<AppConfig>`. Реализации: EnvConfigProvider (только env), MergedConfigProvider (env + Settings).
 - **NotificationSender:** `send(message, chatId)`. Реализация: TelegramNotificationAdapter.
+
+---
+
+## 3. Перезапуск и масштабирование
+
+- **Один процесс:** монитор рассчитан на один инстанс (вертикальное масштабирование). Горизонтальное масштабирование (несколько процессов/воркеров) не заложено.
+- **Перезапуск во время цикла:** при падении или перезапуске процесса цикл проверки пользователей прерывается. При следующем запуске монитор снова загружает пользователей и кэш из хранилища (Sheets); повторная проверка тех же пользователей допустима. Идемпотентность: чтение слотов и обновление lastChecked — идемпотентны; успешный букинг меняет состояние записи, повторная отправка формы букинга на ту же дату может привести к ошибке или дублированию со стороны AIS/VFS — не запускать два монитора на одних и тех же пользователях без координации.
+- **Границы при многопроцессном запуске:** при возможном появлении нескольких процессов (очередь задач, несколько воркеров) необходимо: (1) разделять пользователей между инстансами (например, по диапазону строк или по ключу) или использовать блокировки/очередь; (2) не выполнять букинг для одного и того же пользователя из двух процессов одновременно. Сейчас координация не реализована — рекомендуется один процесс monitor на одну таблицу/набор пользователей.
