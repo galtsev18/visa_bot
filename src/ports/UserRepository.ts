@@ -1,4 +1,4 @@
-import type { User } from './User.js';
+import type { User } from './User';
 
 /**
  * Settings overrides read from storage (e.g. Settings sheet).

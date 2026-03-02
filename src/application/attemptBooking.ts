@@ -2,7 +2,7 @@
  * Use case: attempt to book an appointment for a user on a given date.
  * On success: updates user state, sheets, logs attempt, sends Telegram notification.
  */
-import type { AttemptBookingUser, AttemptBookingDeps } from './types.js';
+import type { AttemptBookingUser, AttemptBookingDeps } from './types';
 
 export async function attemptBooking(
   user: AttemptBookingUser,

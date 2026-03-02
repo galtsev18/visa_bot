@@ -1,4 +1,4 @@
-import type { AppConfig } from './AppConfig.js';
+import type { AppConfig } from './AppConfig';
 
 /**
  * Port: provide application config (env + optional overrides from storage).

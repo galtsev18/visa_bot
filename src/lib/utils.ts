@@ -1,4 +1,4 @@
-import { logger } from './logger.js';
+import { logger } from './logger';
 
 export function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => {
@@ -6,7 +6,7 @@ export function sleep(seconds: number): Promise<void> {
   });
 }
 
-/** @deprecated Use logger.info() or logger.error() from './logger.js'. Kept for compatibility. */
+/** @deprecated Use logger.info() or logger.error() from './logger'. Kept for compatibility. */
 export function log(message: string): void {
   logger.info(message);
 }

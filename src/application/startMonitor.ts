@@ -1,7 +1,7 @@
 /**
  * Use case: start monitor — initialize date cache and send "Monitor started" notification.
  */
-import type { CacheEntry, StartMonitorDeps } from './types.js';
+import type { CacheEntry, StartMonitorDeps } from './types';
 
 export async function startMonitor(
   initialCacheEntries: CacheEntry[] | undefined,

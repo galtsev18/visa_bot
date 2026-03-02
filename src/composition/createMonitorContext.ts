@@ -5,21 +5,22 @@
  * Use this when running from dist so the monitor uses ports/adapters for setup.
  */
 
-import type { AppConfig } from '../ports/AppConfig.js';
-import type { UserRepository } from '../ports/UserRepository.js';
-import type { DateCache } from '../ports/DateCache.js';
-import type { NotificationSender } from '../ports/NotificationSender.js';
-import { EnvConfigProvider } from '../adapters/EnvConfigProvider.js';
-import { MergedConfigProvider } from '../adapters/EnvConfigProvider.js';
-import { SheetsUserRepository } from '../adapters/SheetsUserRepository.js';
-import { TelegramNotificationAdapter } from '../adapters/TelegramNotificationAdapter.js';
-import { DateCacheAdapter } from '../adapters/DateCacheAdapter.js';
-import type { DateCacheBackend } from '../adapters/DateCacheAdapter.js';
-import { createDateCache } from '../lib/dateCache.js';
+import type { User } from '../ports/User';
+import type { AppConfig } from '../ports/AppConfig';
+import type { UserRepository } from '../ports/UserRepository';
+import type { DateCache } from '../ports/DateCache';
+import type { NotificationSender } from '../ports/NotificationSender';
+import { EnvConfigProvider } from '../adapters/EnvConfigProvider';
+import { MergedConfigProvider } from '../adapters/EnvConfigProvider';
+import { SheetsUserRepository } from '../adapters/SheetsUserRepository';
+import { TelegramNotificationAdapter } from '../adapters/TelegramNotificationAdapter';
+import { DateCacheAdapter } from '../adapters/DateCacheAdapter';
+import type { DateCacheBackend } from '../adapters/DateCacheAdapter';
+import { createDateCache } from '../lib/dateCache';
 import {
   validateEnvForSheets,
   validateMultiUserConfig,
-} from '../lib/config.js';
+} from '../lib/config';
 
 export interface MonitorContext {
   config: AppConfig;
@@ -27,23 +28,7 @@ export interface MonitorContext {
   repo: UserRepository;
   dateCache: DateCache;
   notifications: NotificationSender;
-  users: Array<{
-    email: string;
-    password: string;
-    countryCode: string;
-    scheduleId: string;
-    currentDate: string | null;
-    reactionTime: number;
-    dateRanges: Array<{ from: Date; to: Date }>;
-    active: boolean;
-    lastChecked: Date | null;
-    lastBooked: string | null;
-    priority: number;
-    provider: string;
-    rowIndex?: number | null;
-    isDateValid: (date: string | Date) => boolean;
-    needsAppointment: () => boolean;
-  }>;
+  users: User[];
   cacheEntries: Array<{
     provider?: string;
     date: string;

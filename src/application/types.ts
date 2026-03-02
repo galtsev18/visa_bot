@@ -38,14 +38,14 @@ export interface CheckUserWithCacheDeps {
   bot: {
     client: {
       checkAvailableDate: (
-        headers: unknown,
+        headers: Record<string, unknown> | Record<string, string>,
         scheduleId: string,
-        facilityId: number
+        facilityId: number | string
       ) => Promise<string[]>;
       checkAvailableTime: (
-        headers: unknown,
+        headers: Record<string, unknown> | Record<string, string>,
         scheduleId: string,
-        facilityId: number,
+        facilityId: number | string,
         date: string
       ) => Promise<string | null>;
     };
@@ -60,8 +60,8 @@ export interface CheckUserWithCacheDeps {
   getAvailableDates: (provider: string) => string[];
   isCacheStale: (date: string, ttl: number, provider: string) => boolean;
   refreshAllDates: (
-    client: unknown,
-    headers: unknown,
+    client: import('../ports/DateCache').DateCacheClient,
+    headers: Record<string, unknown>,
     scheduleId: string,
     facilityId: number,
     ttl: number,
@@ -82,7 +82,7 @@ export interface AttemptBookingUser {
 export interface AttemptBookingDeps {
   bot: {
     bookAppointment: (
-      headers: unknown,
+      headers: Record<string, unknown> | Record<string, string>,
       date: string
     ) => Promise<{ success: boolean; time?: string } | null>;
   } | null;
@@ -113,7 +113,7 @@ export interface AttemptBookingDeps {
   sendNotification: (msg: string, chatId: string) => Promise<unknown>;
   formatBookingSuccessWithDetails: (
     user: unknown,
-    oldDate: string,
+    oldDate: string | null,
     newDate: string,
     timeSlot: string | null
   ) => string;

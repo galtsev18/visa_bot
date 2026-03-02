@@ -1,7 +1,7 @@
-import type { AppConfig } from '../ports/AppConfig.js';
-import type { ConfigProvider } from '../ports/ConfigProvider.js';
-import type { UserRepository } from '../ports/UserRepository.js';
-import { getConfig as getConfigFromEnv } from '../lib/config.js';
+import type { AppConfig } from '../ports/AppConfig';
+import type { ConfigProvider } from '../ports/ConfigProvider';
+import type { UserRepository } from '../ports/UserRepository';
+import { getConfig as getConfigFromEnv } from '../lib/config';
 
 /**
  * Adapter: config from .env only.

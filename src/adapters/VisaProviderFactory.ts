@@ -1,6 +1,6 @@
-import type { VisaProvider } from '../ports/VisaProvider.js';
-import { AisProvider } from '../lib/providers/ais.js';
-import { VfsGlobalProviderAdapter } from './VfsGlobalProviderAdapter.js';
+import type { VisaProvider } from '../ports/VisaProvider';
+import { AisProvider } from '../lib/providers/ais';
+import { VfsGlobalProviderAdapter } from './VfsGlobalProviderAdapter';
 
 export type ProviderId = 'ais' | 'vfsglobal';
 

@@ -2,8 +2,8 @@ import type {
   DateCache,
   DateCacheClient,
   RefreshDatesOptions,
-} from '../ports/DateCache.js';
-import * as dateCacheLib from '../lib/dateCache.js';
+} from '../ports/DateCache';
+import * as dateCacheLib from '../lib/dateCache';
 
 /** Backend API for date cache (createDateCache() return value or global lib). */
 export interface DateCacheBackend {

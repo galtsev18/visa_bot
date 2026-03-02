@@ -1,5 +1,5 @@
-import type { VisaProvider, VisaCredentials, ProviderSession } from '../ports/VisaProvider.js';
-import { VfsGlobalClient } from '../lib/providers/vfsglobal.js';
+import type { VisaProvider, VisaCredentials, ProviderSession } from '../ports/VisaProvider';
+import { VfsGlobalClient } from '../lib/providers/vfsglobal';
 
 const PROVIDER_NAME = 'vfsglobal';
 

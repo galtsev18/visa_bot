@@ -1,5 +1,5 @@
 import * as chrono from 'chrono-node';
-import { log } from './utils.js';
+import { log } from './utils';
 
 export interface ParsedDateRange {
   from: Date;
@@ -77,7 +77,7 @@ export function isDateInRanges(date: Date | string | null | undefined, ranges: P
     return false;
   }
 
-  let dateObj: Date = date instanceof Date ? date : new Date(date + 'T00:00:00');
+  const dateObj: Date = date instanceof Date ? date : new Date(date + 'T00:00:00');
 
   if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
     return false;

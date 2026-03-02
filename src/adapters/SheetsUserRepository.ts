@@ -1,10 +1,11 @@
-import type { User } from '../ports/User.js';
+import type { User } from '../ports/User';
 import type {
   UserRepository,
   SettingsOverrides,
   BookingAttemptLog,
-} from '../ports/UserRepository.js';
-import * as sheets from '../lib/sheets.js';
+} from '../ports/UserRepository';
+import type { CacheEntryFromSheet } from '../lib/sheets';
+import * as sheets from '../lib/sheets';
 
 /**
  * Adapter: Google Sheets as UserRepository.
@@ -44,7 +45,13 @@ export class SheetsUserRepository implements UserRepository {
     }>;
   }> {
     const data = await sheets.getInitialData();
-    return data;
+    return {
+      users: data.users,
+      cacheEntries: data.cacheEntries.map((e: CacheEntryFromSheet) => ({
+        ...e,
+        available: e.available === true || e.available === 'TRUE',
+      })),
+    };
   }
 
   async updateUserLastChecked(

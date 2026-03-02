@@ -3,24 +3,24 @@
  * Implementations live in adapters; domain and use cases depend only on these.
  */
 
-export type { AppConfig } from './AppConfig.js';
+export type { AppConfig } from './AppConfig';
 export type {
   ConfigProvider,
-} from './ConfigProvider.js';
+} from './ConfigProvider';
 export type {
   DateCache,
   DateCacheClient,
   RefreshDatesOptions,
-} from './DateCache.js';
-export type { NotificationSender } from './NotificationSender.js';
-export type { User, UserData } from './User.js';
+} from './DateCache';
+export type { NotificationSender } from './NotificationSender';
+export type { User, UserData } from './User';
 export type {
   UserRepository,
   SettingsOverrides,
   BookingAttemptLog,
-} from './UserRepository.js';
+} from './UserRepository';
 export type {
   VisaProvider,
   VisaCredentials,
   ProviderSession,
-} from './VisaProvider.js';
+} from './VisaProvider';

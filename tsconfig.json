@@ -1,11 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": [
-      "ES2022"
-    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
@@ -16,23 +14,11 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "allowJs": true,
+    "allowJs": false,
     "checkJs": false,
     "noEmit": false,
     "isolatedModules": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "src/application/attemptBooking.js",
-    "src/application/checkUserWithCache.js",
-    "src/application/startMonitor.js",
-    "src/composition/createMonitorContext.js",
-    "src/lib/dateParser.js",
-    "src/lib/logger.js",
-    "src/lib/utils.js"
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/**/*.js"]
 }

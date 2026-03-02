@@ -2,7 +2,7 @@
  * Use case: check a user for an available date using shared cache.
  * Refreshes cache when stale, filters by user's date validity, returns earliest valid date or null.
  */
-import type { CheckUserUser, CheckUserWithCacheDeps } from './types.js';
+import type { CheckUserUser, CheckUserWithCacheDeps } from './types';
 
 export async function checkUserWithCache(
   user: CheckUserUser,

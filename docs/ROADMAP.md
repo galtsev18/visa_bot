@@ -9,7 +9,7 @@
 ### 1. Один путь запуска monitor (только composition root) — выполнено
 
 - **Проблема:** при `npm run dev` (src) и `npm start` (dist) разное поведение: fallback инициализировал lib напрямую, без портов.
-- **Сделано:** команда `monitor` всегда вызывает `createMonitorContext`; добавлен реэкспорт `composition/createMonitorContext.js` из `.ts` для запуска из src через tsx. Fallback удалён.
+- **Сделано:** команда `monitor` всегда вызывает `createMonitorContext`; весь src на TypeScript, запуск через tsx. Fallback удалён.
 - **Связано:** TECH_DEBT § 1 (смешение слоёв).
 
 ### 2. Обязательные deps в UserBotManager — выполнено
@@ -24,8 +24,8 @@
 
 ### 3. Устранение глобального состояния в lib — частично выполнено
 
-- **Проблема:** в `lib/sheets.js`, `lib/dateCache.js`, `lib/telegram.js` — модульные `let` (sheets, cache, bot).
-- **Сделано:** для кэша дат добавлен фасад `createDateCache()` в `lib/dateCache.js` (собственный Map и опция `persist`); в composition root создаётся экземпляр с `repo.updateAvailableDate` и передаётся в `DateCacheAdapter`. Глобальный кэш по-прежнему используется командами без composition root (например, bot). Sheets и Telegram пока с глобальным состоянием.
+- **Проблема:** в `lib/sheets.ts`, `lib/dateCache.ts`, `lib/telegram.ts` — модульные `let` (sheets, cache, bot).
+- **Сделано:** для кэша дат добавлен фасад `createDateCache()` в `lib/dateCache.ts` (собственный Map и опция `persist`); в composition root создаётся экземпляр с `repo.updateAvailableDate` и передаётся в `DateCacheAdapter`. Глобальный кэш по-прежнему используется командами без composition root (например, bot). Sheets и Telegram пока с глобальным состоянием.
 - **Связано:** TECH_DEBT § 1 (глобальное состояние).
 
 ### 4. Единый источник конфигурации — выполнено
@@ -46,7 +46,7 @@
 ### 6. Интеграционные тесты
 
 - **План:** добавить в [TESTING.md](TESTING.md) целевой сценарий: интеграционный тест команды monitor с подменой всех портов (repo, dateCache, notifications, VisaProvider) моками — один цикл от CLI до use cases.
-- **Сделано:** в TESTING.md добавлен подраздел «Целевой сценарий»; добавлен тест `test/integration/monitor-one-cycle.test.js`: проверка связки createDateCache + DateCacheAdapter + checkUserWithCache (без UserBotManager, чтобы не подгружать lib/telegram).
+- **Сделано:** в TESTING.md добавлен подраздел «Целевой сценарий»; добавлен тест `test/integration/monitor-one-cycle.test.js` (тесты остаются .js).: проверка связки createDateCache + DateCacheAdapter + checkUserWithCache (без UserBotManager, чтобы не подгружать lib/telegram).
 - **Связано:** п. 1, 2; CODE_QUALITY § 7.
 
 ### 7. Поведение при перезапуске и границы масштабирования — выполнено
@@ -55,17 +55,16 @@
 - **Сделано:** в [ARCHITECTURE.md](ARCHITECTURE.md) добавлена секция «3. Перезапуск и масштабирование» (один процесс, допустимость повторной проверки при перезапуске, границы при нескольких процессах).
 - **Связано:** TECH_DEBT § 1 (один процесс).
 
-### 8. Типизация lib и commands — в работе
+### 8. Типизация lib и commands — выполнено
 
 - **План:** постепенная миграция `lib/` и `commands/` на TypeScript.
-- **Сделано:** перенесены `lib/logger`, `lib/utils`, `lib/dateParser` (каждый: .ts + реэкспорт .js). Остальные модули lib/commands — по мере возможности.
-- **Правило сборки:** реэкспортные `.js` (с парным `.ts`) не должны компилироваться — иначе ошибка «overwritten by multiple input files». Список `exclude` в `tsconfig.json` обновляется автоматически скриптом `scripts/update-ts-exclude.js` (запускается перед `npm run build` и `npm run typecheck`). При миграции нового модуля на TS достаточно добавить парный реэкспорт `.js` — вручную в exclude ничего добавлять не нужно. **После завершения миграции JS→TS** скрипт можно удалить, из package.json убрать его вызов из `build` и `typecheck`, а в tsconfig оставить `exclude`: `["node_modules", "dist"]`.
+- **Сделано:** весь `src/` переведён на TypeScript. Удалены реэкспортные `.js`, удалён скрипт `scripts/update-ts-exclude.js`. В tsconfig `exclude` только `["node_modules", "dist"]`. `main` в package.json указывает на `dist/index.js`, `dev` запускает `tsx src/index.ts`.
 - **Связано:** TECH_DEBT § 1 (типизация); ADR 0002.
 
 ### 9. Неиспользуемый код — частично выполнено
 
 - **composition/index.ts** — удалён (barrel не импортировался).
-- **lib/dateCache.js** — неэкспортируемые функции переименованы в `_isDateCached`, `_getAvailableTimes`, `_getStaleDates` (внутренние, линт не предупреждает).
+- **lib/dateCache.ts** — миграция завершена (ранее были внутренние функции с префиксом `_`).
 - **Связано:** TECH_DEBT § 2.
 
 ---
@@ -79,5 +78,5 @@
 - [x] В ARCHITECTURE и README описан рекомендуемый способ запуска и необходимость сборки для VFS
 - [x] В TESTING.md добавлен сценарий интеграционного теста monitor с моками портов
 - [x] В ARCHITECTURE описано поведение при перезапуске и границы многопроцессного запуска
-- [ ] Миграция lib/commands на TypeScript (по мере возможности); начато: lib/logger, lib/utils, lib/dateParser
+- [x] Миграция lib/commands на TypeScript (выполнено полностью)
 - [x] Решение по composition/index.ts (удалён) и неэкспортируемым функциям dateCache (префикс _)

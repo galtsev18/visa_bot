@@ -1,4 +1,4 @@
-import type { VisaProvider, VisaCredentials, ProviderSession } from '../ports/VisaProvider.js';
+import type { VisaProvider, VisaCredentials, ProviderSession } from '../ports/VisaProvider';
 
 /**
  * Client-shaped wrapper around VisaProvider for use with existing Bot.

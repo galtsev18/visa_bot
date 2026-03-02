@@ -1,8 +1,8 @@
-import type { NotificationSender } from '../ports/NotificationSender.js';
+import type { NotificationSender } from '../ports/NotificationSender';
 import {
   initializeTelegram,
   sendNotification,
-} from '../lib/telegram.js';
+} from '../lib/telegram';
 
 /**
  * Adapter: Telegram Bot API as NotificationSender.
