@@ -1,21 +1,27 @@
 /**
- * Integration test: one cycle of monitor flow with mocked ports.
+ * Integration tests: monitor flow with mocked ports.
  * See docs/TESTING.md "Целевой сценарий: интеграционный тест команды monitor".
- * Uses real createDateCache + DateCacheAdapter + checkUserWithCache use case; no UserBotManager
- * (to avoid pulling in lib/telegram and node-telegram-bot-api). No real Sheets, Telegram, or AIS.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { User } from '../../src/lib/user.js';
-import { checkUserWithCache } from '../../src/application/checkUserWithCache.js';
-import { createDateCache } from '../../src/lib/dateCache.js';
-import { DateCacheAdapter } from '../../src/adapters/DateCacheAdapter.js';
+import { User } from '../../src/lib/user';
+import { checkUserWithCache } from '../../src/application/checkUserWithCache';
+import { createDateCache } from '../../src/lib/dateCache';
+import { DateCacheAdapter } from '../../src/adapters/DateCacheAdapter';
+import { UserBotManager } from '../../src/lib/userBotManager';
+import type { UserRepository } from '../../src/ports/UserRepository';
+import type { DateCache } from '../../src/ports/DateCache';
+import type { NotificationSender } from '../../src/ports/NotificationSender';
 
 function makeConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     cacheTtl: 60,
     facilityId: 134,
+    telegramManagerChatId: 'test-chat',
     aisRequestDelaySec: 2,
+    rotationCooldown: 30,
+    refreshInterval: 3,
+    sheetsRefreshInterval: 300,
     ...overrides,
   };
 }
@@ -70,5 +76,52 @@ describe('integration: monitor one cycle', () => {
 
     assert.strictEqual(date, '2025-06-01', 'checkUserWithCache should return the only valid date from cache');
     assert.strictEqual(dateCache.getCacheStats().total, 1);
+  });
+
+  it('UserBotManager.runOneCycle: startMonitor + one user check with mocked repo, dateCache, notifications', async () => {
+    const user = makeMockUser();
+    const sent: string[] = [];
+    const notif: NotificationSender = {
+      send: async (msg: string) => {
+        sent.push(msg);
+        return true;
+      },
+    };
+
+    const repo: UserRepository = {
+      initialize: async () => {},
+      getActiveUsers: async () => [user],
+      getSettingsOverrides: async () => ({}),
+      getInitialData: async () => ({ users: [user], cacheEntries: [] }),
+      updateUserLastChecked: async () => {},
+      updateUserCurrentDate: async () => {},
+      updateUserLastBooked: async () => {},
+      updateUserPriority: async () => {},
+      logBookingAttempt: async () => {},
+      updateAvailableDate: async () => {},
+    };
+
+    const dateCacheBackend = createDateCache({ persist: async () => {} });
+    await dateCacheBackend.initializeCache([
+      {
+        date: '2025-06-01',
+        available: true,
+        provider: 'ais',
+        cache_valid_until: new Date(Date.now() + 120000).toISOString(),
+      },
+    ]);
+    const dateCache: DateCache = new DateCacheAdapter(dateCacheBackend);
+
+    const config = makeConfig();
+    const manager = new UserBotManager(config, { repo, dateCache, notifications: notif });
+    manager.users = [user];
+    manager.bots.set(user.email, { client: {} } as never);
+    manager.sessions.set(user.email, {});
+
+    await manager.runOneCycle([], { skipSheetsRefresh: true });
+
+    assert.ok(sent.some((m) => m.includes('Monitor Started')), 'should send Monitor started');
+    assert.ok(sent.some((m) => m.includes('Matching Slot Found')), 'should send slot found for cached date');
+    assert.ok(sent.length >= 2, 'at least Monitor started and Slot found');
   });
 });

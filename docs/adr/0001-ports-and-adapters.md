@@ -10,7 +10,7 @@
 
 ## Decision
 
-Вводим слой **портов** (интерфейсы в `src/ports/`) и **адаптеров** (реализации в `src/adapters/` и при fallback в `src/lib/`). Use cases (application) зависят только от портов: UserRepository, DateCache, ConfigProvider, NotificationSender, VisaProvider. Конкретные реализации (Sheets, Telegram, AIS, VFS) создаются в **composition root** (`composition/createMonitorContext.ts`) и передаются в UserBotManager и use cases через зависимости. Команда `monitor` всегда использует composition root (из src — через реэкспорт createMonitorContext.js и tsx; из dist — скомпилированный модуль). UserBotManager получает обязательные deps (repo, dateCache, notifications) из composition root.
+Вводим слой **портов** (интерфейсы в `src/ports/`) и **адаптеров** (реализации в `src/adapters/` и при fallback в `src/lib/`). Use cases (application) зависят только от портов: UserRepository, DateCache, ConfigProvider, NotificationSender, VisaProvider. Конкретные реализации (Sheets, Telegram, AIS, VFS) создаются в **composition root** (`composition/createMonitorContext.ts`) и передаются в UserBotManager и use cases через зависимости. Команда `monitor` всегда использует composition root (запуск из src через `npm start` / `npm run dev` — tsx; при необходимости — из собранного dist). UserBotManager получает обязательные deps (repo, dateCache, notifications) из composition root.
 
 ## Consequences
 

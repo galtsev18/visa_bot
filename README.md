@@ -21,7 +21,7 @@ The bot logs into your account on https://ais.usvisa-info.com/ and checks for av
 
 ## Prerequisites
 
-- Node.js 16+ 
+- Node.js 18+ 
 - A valid US visa interview appointment
 - Access to https://ais.usvisa-info.com/
 
@@ -113,7 +113,7 @@ See [QUICKSTART.md](QUICKSTART.md) or [SETUP.md](SETUP.md) for detailed setup in
 Run the bot with your current appointment date:
 
 ```bash
-node src/index.js bot -c <current_date> [-t <target_date>] [-m <min_date>]
+npm start -- bot -c <current_date> [-t <target_date>] [-m <min_date>]
 ```
 
 ### Command Line Arguments
@@ -128,22 +128,22 @@ node src/index.js bot -c <current_date> [-t <target_date>] [-m <min_date>]
 
 ```bash
 # Basic usage - reschedule to any earlier date
-node src/index.js bot -c 2024-06-15
+npm start -- bot -c 2024-06-15
 
 # With target date - stop when you get June 1st or earlier  
-node src/index.js bot -c 2024-06-15 -t 2024-06-01
+npm start -- bot -c 2024-06-15 -t 2024-06-01
 
 # With minimum date - only accept dates after May 1st
-node src/index.js bot -c 2024-06-15 -m 2024-05-01
+npm start -- bot -c 2024-06-15 -m 2024-05-01
 
 # Get Telegram chat ID
-node src/index.js get-chat-id
+npm start -- get-chat-id
 
 # Test Google Sheets connection
-node src/index.js test-sheets
+npm start -- test-sheets
 
 # Get help
-node src/index.js --help
+npm start -- --help
 ```
 
 ## How It Behaves

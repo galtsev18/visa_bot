@@ -43,6 +43,7 @@ export class UserBotManager {
   bots: Map<string, Bot>;
   sessions: Map<string, Record<string, string> | Record<string, unknown>>;
   lastSheetsRefresh: Date | null;
+  private _monitorStarted = false;
 
   constructor(config: AppConfigLike, deps: ManagerDeps) {
     if (!deps?.repo || !deps?.dateCache || !deps?.notifications) {
@@ -158,81 +159,97 @@ export class UserBotManager {
     });
   }
 
-  async monitorWithRotation(initialCacheEntries?: Array<{ provider?: string; date: string }>): Promise<never> {
-    log('Starting monitoring loop with rotation...');
-
+  /**
+   * Run one monitoring cycle: optionally start monitor (first call), then refresh users if needed,
+   * get next user, check cache, attempt booking if date found, update priority. No sleep.
+   * Used by monitorWithRotation and by integration tests.
+   * @param initialCacheEntries - passed to startMonitor on first run
+   * @param opts - skipSheetsRefresh: true to skip repo refresh (for tests with pre-set users)
+   */
+  async runOneCycle(
+    initialCacheEntries?: Array<{ provider?: string; date: string }>,
+    opts?: { skipSheetsRefresh?: boolean }
+  ): Promise<void> {
     const repo = this.deps.repo;
     const dc = this.deps.dateCache;
     const notif = this.deps.notifications;
     const chatId = String(this.config.telegramManagerChatId ?? '');
 
-    await startMonitorUseCase(initialCacheEntries, {
-      initializeCache: () => Promise.resolve(),
-      getCacheStats: () => dc.getCacheStats(),
-      formatMonitorStarted,
-      sendNotification: (msg, chatIdArg) => notif.send(msg, chatIdArg || chatId),
-      users: this.users,
-      config: this.config,
-    });
+    if (!this._monitorStarted) {
+      await startMonitorUseCase(initialCacheEntries, {
+        initializeCache: () => Promise.resolve(),
+        getCacheStats: () => dc.getCacheStats(),
+        formatMonitorStarted,
+        sendNotification: (msg, chatIdArg) => notif.send(msg, chatIdArg || chatId),
+        users: this.users,
+        config: this.config,
+      });
+      startMetrics();
+      this._monitorStarted = true;
+    }
 
-    startMetrics();
+    if (!opts?.skipSheetsRefresh) {
+      const now = new Date();
+      if (
+        !this.lastSheetsRefresh ||
+        (now.getTime() - this.lastSheetsRefresh.getTime()) / 1000 > (this.config.sheetsRefreshInterval ?? 300)
+      ) {
+        log('Refreshing users and settings from Google Sheets...');
+        try {
+          const [sheetSettings, freshUsers] = await Promise.all([
+            repo.getSettingsOverrides(),
+            repo.getActiveUsers(),
+          ]);
+          Object.assign(this.config, sheetSettings);
+          await this.initializeUsers(freshUsers);
+          this.lastSheetsRefresh = now;
+          log(`Refreshed users: ${freshUsers.length} active users`);
+        } catch (error) {
+          log(`Failed to refresh users: ${formatErrorForLog(error)}`);
+        }
+      }
+    }
+
+    const user = getNextUser(this.users, this.config.rotationCooldown ?? 30);
+
+    if (!user) {
+      log('No users to check, sleeping...');
+      return;
+    }
+
+    log(`Checking user ${user.email}...`);
+
+    const availableDate = await this.checkUserWithCache(user);
+    incrementChecks();
+
+    if (availableDate) {
+      const slotFoundMsg = formatSlotFound(user, availableDate);
+      await notif.send(slotFoundMsg, chatId);
+      const booked = await this.attemptBooking(user, availableDate);
+      if (booked) incrementBookings();
+    } else {
+      await repo.logBookingAttempt({
+        user_email: user.email,
+        date_attempted: null,
+        result: 'skipped',
+        reason: 'No valid dates found',
+      });
+    }
+
+    const checkedAt = new Date();
+    updateUserPriority(user, checkedAt);
+    await Promise.all([
+      repo.updateUserLastChecked(user.email, checkedAt, user.rowIndex ?? undefined),
+      repo.updateUserPriority(user.email, user.priority, user.rowIndex ?? undefined),
+    ]);
+  }
+
+  async monitorWithRotation(initialCacheEntries?: Array<{ provider?: string; date: string }>): Promise<never> {
+    log('Starting monitoring loop with rotation...');
 
     while (true) {
       try {
-        const now = new Date();
-        if (
-          !this.lastSheetsRefresh ||
-          (now.getTime() - this.lastSheetsRefresh.getTime()) / 1000 > (this.config.sheetsRefreshInterval ?? 300)
-        ) {
-          log('Refreshing users and settings from Google Sheets...');
-          try {
-            const [sheetSettings, freshUsers] = await Promise.all([
-              repo.getSettingsOverrides(),
-              repo.getActiveUsers(),
-            ]);
-            Object.assign(this.config, sheetSettings);
-            await this.initializeUsers(freshUsers);
-            this.lastSheetsRefresh = now;
-            log(`Refreshed users: ${freshUsers.length} active users`);
-          } catch (error) {
-            log(`Failed to refresh users: ${formatErrorForLog(error)}`);
-          }
-        }
-
-        const user = getNextUser(this.users, this.config.rotationCooldown ?? 30);
-
-        if (!user) {
-          log('No users to check, sleeping...');
-          await sleep(this.config.refreshInterval ?? 3);
-          continue;
-        }
-
-        log(`Checking user ${user.email}...`);
-
-        const availableDate = await this.checkUserWithCache(user);
-        incrementChecks();
-
-        if (availableDate) {
-          const slotFoundMsg = formatSlotFound(user, availableDate);
-          await notif.send(slotFoundMsg, chatId);
-          const booked = await this.attemptBooking(user, availableDate);
-          if (booked) incrementBookings();
-        } else {
-          await repo.logBookingAttempt({
-            user_email: user.email,
-            date_attempted: null,
-            result: 'skipped',
-            reason: 'No valid dates found',
-          });
-        }
-
-        const checkedAt = new Date();
-        updateUserPriority(user, checkedAt);
-        await Promise.all([
-          repo.updateUserLastChecked(user.email, checkedAt, user.rowIndex ?? undefined),
-          repo.updateUserPriority(user.email, user.priority, user.rowIndex ?? undefined),
-        ]);
-
+        await this.runOneCycle(initialCacheEntries);
         await sleep(this.config.refreshInterval ?? 3);
       } catch (error) {
         log(`Error in monitoring loop: ${formatErrorForLog(error)}`);

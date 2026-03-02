@@ -1,5 +1,5 @@
 import * as chrono from 'chrono-node';
-import { log } from './utils';
+import { log, formatErrorForLog } from './utils';
 
 export interface ParsedDateRange {
   from: Date;
@@ -29,7 +29,7 @@ export function parseDate(dateStr: string | null | undefined): Date | null {
     }
     return null;
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = formatErrorForLog(err);
     log(`parseDate failed for "${dateStr}": ${errMsg}`);
     return null;
   }

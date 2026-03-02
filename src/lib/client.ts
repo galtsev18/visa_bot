@@ -1,4 +1,3 @@
-import fetch, { type Response } from 'node-fetch';
 import cheerio from 'cheerio';
 import { getBaseUri } from './config';
 

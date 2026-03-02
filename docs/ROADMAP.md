@@ -4,79 +4,26 @@
 
 ---
 
-## Высокий приоритет
-
-### 1. Один путь запуска monitor (только composition root) — выполнено
-
-- **Проблема:** при `npm run dev` (src) и `npm start` (dist) разное поведение: fallback инициализировал lib напрямую, без портов.
-- **Сделано:** команда `monitor` всегда вызывает `createMonitorContext`; весь src на TypeScript, запуск через tsx. Fallback удалён.
-- **Связано:** TECH_DEBT § 1 (смешение слоёв).
-
-### 2. Обязательные deps в UserBotManager — выполнено
-
-- **Проблема:** UserBotManager принимал опциональные `deps` и при их отсутствии вызывал lib напрямую — два контура в одном классе.
-- **Сделано:** зависимости обязательны; при отсутствии `repo`, `dateCache` или `notifications` конструктор выбрасывает ошибку. Все ветки с прямым использованием lib удалены из UserBotManager.
-- **Связано:** CONTRACTS.md, тесты с моками портов.
-
----
-
 ## Средний приоритет
 
-### 3. Устранение глобального состояния в lib — частично выполнено
+### 1. Устранение глобального состояния в lib — выполнено
 
 - **Проблема:** в `lib/sheets.ts`, `lib/dateCache.ts`, `lib/telegram.ts` — модульные `let` (sheets, cache, bot).
-- **Сделано:** для кэша дат добавлен фасад `createDateCache()` в `lib/dateCache.ts` (собственный Map и опция `persist`); в composition root создаётся экземпляр с `repo.updateAvailableDate` и передаётся в `DateCacheAdapter`. Глобальный кэш по-прежнему используется командами без composition root (например, bot). Sheets и Telegram пока с глобальным состоянием.
+- **Сделано:** dateCache — фасад `createDateCache()` + экземпляр в composition root; telegram — глобальный `bot` убран, добавлен `createTelegramSender()`, адаптер создаёт sender в конструкторе; **sheets** — всё мутабельное состояние собрано в один объект `state` (устанавливается через `initializeSheets()`), команда monitor подписывается на квоты через `repo.setQuotaNotifier()`, без прямого импорта из lib/sheets.
 - **Связано:** TECH_DEBT § 1 (глобальное состояние).
-
-### 4. Единый источник конфигурации — выполнено
-
-- **Проблема:** конфиг собирался из env и листа Settings в разных местах.
-- **Сделано:** порт ConfigProvider с `getConfig(): Promise<AppConfig>`; добавлен `MergedConfigProvider(envProvider, repo)`, который при getConfig() инициализирует repo, читает Settings и возвращает объединённый конфиг. В порт UserRepository добавлен метод `initialize`. Команда monitor получает конфиг только через MergedConfigProvider.
-- **Связано:** CONTRACTS.md, EnvConfigProvider.
 
 ---
 
 ## Низкий приоритет
 
-### 5. Документация: рекомендуемый способ запуска — выполнено
+### 2. Интеграционные тесты — выполнено
 
-- **Сделано:** в [ARCHITECTURE.md](ARCHITECTURE.md) добавлен блок «Рекомендуемый способ запуска» (dev и prod — `npm start` / `npm run dev` через tsx; при необходимости запуска из dist — `npm run build && npm run start:dist`). В README указаны примеры запуска.
-- **Связано:** REQUIREMENTS § 2 (запуск приложения и VFS).
-
-### 6. Интеграционные тесты
-
-- **План:** добавить в [TESTING.md](TESTING.md) целевой сценарий: интеграционный тест команды monitor с подменой всех портов (repo, dateCache, notifications, VisaProvider) моками — один цикл от CLI до use cases.
-- **Сделано:** в TESTING.md добавлен подраздел «Целевой сценарий»; добавлен тест `test/integration/monitor-one-cycle.test.ts`: проверка связки createDateCache + DateCacheAdapter + checkUserWithCache (без UserBotManager, чтобы не подгружать lib/telegram).
-- **Связано:** п. 1, 2; CODE_QUALITY § 7.
-
-### 7. Поведение при перезапуске и границы масштабирования — выполнено
-
-- **План:** в ARCHITECTURE или ADR кратко зафиксировать перезапуск и границы многопроцессного запуска.
-- **Сделано:** в [ARCHITECTURE.md](ARCHITECTURE.md) добавлена секция «3. Перезапуск и масштабирование» (один процесс, допустимость повторной проверки при перезапуске, границы при нескольких процессах).
-- **Связано:** TECH_DEBT § 1 (один процесс).
-
-### 8. Типизация lib и commands — выполнено
-
-- **План:** постепенная миграция `lib/` и `commands/` на TypeScript.
-- **Сделано:** весь `src/` и тесты на TypeScript. Импорты без расширений, `moduleResolution: "Bundler"`. Запуск: `npm start` и `npm run dev` — оба через `tsx src/index.ts`.
-- **Связано:** TECH_DEBT § 1 (типизация); ADR 0002.
-
-### 9. Неиспользуемый код — частично выполнено
-
-- **composition/index.ts** — удалён (barrel не импортировался).
-- **lib/dateCache.ts** — миграция завершена (ранее были внутренние функции с префиксом `_`).
-- **Связано:** TECH_DEBT § 2.
+- **План:** интеграционный тест команды monitor с подменой портов (repo, dateCache, notifications) — один цикл от CLI до use cases.
+- **Сделано:** тест `test/integration/monitor-one-cycle.test.ts`: (1) связка createDateCache + DateCacheAdapter + checkUserWithCache; (2) **UserBotManager.runOneCycle** с моками repo, dateCache, notifications — проверка «Monitor started» и «Matching Slot Found». В UserBotManager добавлен метод `runOneCycle(initialCacheEntries?, opts?)` для одного шага цикла (используется в цикле и в тестах).
+- **Связано:** CODE_QUALITY § 7.
 
 ---
 
-## Чек-лист реализации планов
+## Чек-лист (оставшееся)
 
-- [x] Один путь запуска monitor (composition root; fallback удалён)
-- [x] UserBotManager принимает только обязательные deps (repo, dateCache, notifications)
-- [x] Устранение глобального состояния в lib для dateCache (createDateCache + DI в DateCacheAdapter); sheets/telegram — в планах
-- [x] ConfigProvider возвращает объединённый AppConfig (env + Settings через MergedConfigProvider)
-- [x] В ARCHITECTURE и README описан рекомендуемый способ запуска (npm start / npm run dev через tsx)
-- [x] В TESTING.md добавлен сценарий интеграционного теста monitor с моками портов
-- [x] В ARCHITECTURE описано поведение при перезапуске и границы многопроцессного запуска
-- [x] Миграция lib/commands на TypeScript (выполнено полностью)
-- [x] Решение по composition/index.ts (удалён) и неэкспортируемым функциям dateCache (префикс _)
+- [x] Устранение глобального состояния в lib для **sheets** (состояние в одном объекте `state`, monitor использует `repo.setQuotaNotifier`)

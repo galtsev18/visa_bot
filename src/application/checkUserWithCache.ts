@@ -3,6 +3,7 @@
  * Refreshes cache when stale, filters by user's date validity, returns earliest valid date or null.
  */
 import type { CheckUserUser, CheckUserWithCacheDeps } from './types';
+import { formatErrorForLog } from '../lib/utils';
 
 export async function checkUserWithCache(
   user: CheckUserUser,
@@ -53,8 +54,7 @@ export async function checkUserWithCache(
       );
       datesToUse = getAvailableDates(provider);
     } catch (error) {
-      const errMsg =
-        error instanceof Error ? error.message : String(error);
+      const errMsg = formatErrorForLog(error);
       log(`Failed to refresh cache: ${errMsg}`);
     }
   }

@@ -61,7 +61,7 @@
 | `logBookingAttempt` | `logBookingAttempt(attempt: BookingAttemptLog): Promise<void>` | Записать попытку букинга в лог. |
 | `updateAvailableDate` | `updateAvailableDate(date, available, times?, facilityId?): Promise<void>` | Сохранить запись кэша дат (используется адаптером DateCache при персистентности). |
 
-**Реализация:** `SheetsUserRepository`.
+**Реализация:** `SheetsUserRepository` (при `initialize()` вызывает `initializeSheets()` из lib/sheets, что создаёт клиент по умолчанию для всех экспортов модуля). Адаптер дополнительно предоставляет `setQuotaNotifier(fn)` для подписки на квоты Sheets; команда monitor использует его для уведомлений в Telegram. Для тестов или нескольких таблиц можно использовать фабрику `createSheetsClient(credentialsPath, sheetId)` из `lib/sheets.ts` — она возвращает объект `SheetsClient` с тем же API и изолированным состоянием.
 
 ---
 
@@ -90,7 +90,7 @@
 | `updateDate` | `updateDate(date, available, times?, ttlSeconds?, provider?): void` | Обновить одну запись (in-memory + при необходимости persist). |
 | `refreshAllDates` | `refreshAllDates(client, sessionHeaders, scheduleId, facilityId, ttlSeconds, provider?, options?): Promise<string[]>` | Запросить даты у провайдера через client и обновить кэш; вернуть список дат. |
 
-**Реализация:** `DateCacheAdapter` (при запуске через composition root получает экземпляр из `createDateCache()` в lib/dateCache.js с опцией persist; иначе использует глобальный lib/dateCache).
+**Реализация:** `DateCacheAdapter` (при запуске через composition root получает экземпляр из `createDateCache()` в lib/dateCache с опцией persist; иначе использует глобальный lib/dateCache).
 
 ---
 
@@ -152,7 +152,7 @@
 | `isDateInRange(date)` | Дата попадает в один из dateRanges. |
 | `isDateAfterReactionTime(date)` | Дата не раньше (сегодня + reactionTime дней). |
 
-Реализация доменной модели: `src/lib/user.js` (совместимая с интерфейсом User).
+Реализация доменной модели: `src/lib/user.ts` (совместимая с интерфейсом User).
 
 ---
 

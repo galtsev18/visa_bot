@@ -4,6 +4,8 @@ C4, DFD и sequence-диаграммы в формате Mermaid. Рендер: 
 
 Связано: [ARCHITECTURE.md](ARCHITECTURE.md) · [CONTRACTS.md](CONTRACTS.md) · [ADR](adr/README.md).
 
+**Актуальность:** диаграммы соответствуют текущей архитектуре: Node 18+, встроенный fetch, состояние sheets в одном объекте, уведомления о квотах через `repo.setQuotaNotifier()`, Telegram через `createTelegramSender()`.
+
 ---
 
 ## 1. C4 Model
@@ -227,6 +229,8 @@ sequenceDiagram
 
     CLI->>CLI: new UserBotManager(config, deps)
     CLI->>CLI: manager.initializeUsers(users)
+    CLI->>Repo: setQuotaNotifier(callback)
+    Note over Repo: При превышении квот Sheets — уведомление в Telegram
     CLI->>Cache: initialize(cacheEntries)
     CLI->>Notif: send("Monitor started...", chatId)
     Notif->>TG: sendMessage
@@ -287,7 +291,7 @@ sequenceDiagram
 sequenceDiagram
     participant Op as Оператор
     participant CLI as bot command
-    participant Bot as Bot (lib/bot.js)
+    participant Bot as Bot (lib/bot)
     participant Client as VisaHttpClient / ProviderBackedClient
     participant AIS as AIS API
     participant TG as Telegram

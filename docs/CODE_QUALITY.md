@@ -23,7 +23,7 @@
 ## 3. Линтинг и типизация
 
 - **ESLint:** конфигурация в `eslint.config.js`. Правила TypeScript (typescript-eslint) применяются к `.ts` файлам. Игнорируются `dist/`, `node_modules/`.
-- **TypeScript:** строгая проверка для кода в `src/ports/`, `src/application/`, `src/adapters/`, `src/composition/`. Команда: `npm run typecheck`. В `lib/` и `commands/` допустим JS с JSDoc при необходимости.
+- **TypeScript:** строгая проверка для всего `src/` (ports, application, adapters, composition, lib, commands). Команда: `npm run typecheck`.
 - Требования к линту и typecheck: `npm run lint` и `npm run typecheck` проходят в CI без ошибок. Предупреждения (warn) допустимы, но их количество не должно расти без обоснования.
 
 ---

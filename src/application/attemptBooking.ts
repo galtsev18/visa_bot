@@ -3,6 +3,7 @@
  * On success: updates user state, sheets, logs attempt, sends Telegram notification.
  */
 import type { AttemptBookingUser, AttemptBookingDeps } from './types';
+import { formatErrorForLog } from '../lib/utils';
 
 export async function attemptBooking(
   user: AttemptBookingUser,
@@ -86,7 +87,7 @@ export async function attemptBooking(
     await sendNotification(failureMsg, config.telegramManagerChatId ?? '');
     return false;
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
+    const errMsg = formatErrorForLog(error);
     log(`Booking failed for ${user.email} on ${date}: ${errMsg}`);
 
     await logBookingAttempt({

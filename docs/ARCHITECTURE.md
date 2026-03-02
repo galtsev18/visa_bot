@@ -10,13 +10,15 @@
 
 ### 1.1 Зависимости
 
-- **Runtime:** Node.js, ESM
+- **Runtime:** Node.js 18+, ESM (`engines.node` в package.json)
 - **CLI:** Commander
-- **HTTP:** node-fetch
+- **HTTP:** встроенный `fetch` (Node 18+), без node-fetch
 - **Парсинг:** cheerio, chrono-node
-- **Интеграции:** googleapis (Sheets), Telegram Bot API (fetch)
+- **Интеграции:** googleapis (Sheets), Telegram Bot API (fetch к api.telegram.org)
 - **Логирование:** pino (`LOG_LEVEL`)
 - **Опционально:** Puppeteer + stealth (VFS/Cloudflare)
+
+**Состояние в lib:** в `lib/sheets.ts` — фабрика `createSheetsClient(credentialsPath, sheetId)` возвращает экземпляр с собственным состоянием (для тестов или нескольких таблиц); `initializeSheets()` создаёт клиент по умолчанию, все текущие экспорты делегируют ему. В `lib/telegram.ts` — фабрика `createTelegramSender()`. В `lib/dateCache.ts` — фасад `createDateCache()`. Команда monitor подписывается на квоты через `repo.setQuotaNotifier()`.
 
 ### 1.2 Дерево исходников
 

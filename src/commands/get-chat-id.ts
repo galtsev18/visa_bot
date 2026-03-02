@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { getConfig } from '../lib/config';
 import { initializeSheets, readSettingsFromSheet } from '../lib/sheets';
 import { log, formatErrorForLog } from '../lib/utils';

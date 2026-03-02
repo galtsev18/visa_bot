@@ -6,12 +6,15 @@
 
 import * as sheets from './sheets';
 import * as dateCache from './dateCache';
-import { sendNotification } from './telegram';
+import { createTelegramSender } from './telegram';
 import type { UserRepository } from '../ports/UserRepository';
 import type { DateCache } from '../ports/DateCache';
 import type { NotificationSender } from '../ports/NotificationSender';
 
-export function createFallbackAdapters(): {
+export function createFallbackAdapters(options?: {
+  telegramToken?: string;
+  telegramChatId?: string;
+}): {
   repo: UserRepository;
   dateCache: DateCache;
   notifications: NotificationSender;
@@ -69,8 +72,13 @@ export function createFallbackAdapters(): {
       ),
   };
 
+  const telegramSender =
+    options?.telegramToken && options?.telegramChatId
+      ? createTelegramSender(options.telegramToken, options.telegramChatId)
+      : null;
   const notifications: NotificationSender = {
-    send: (message, chatId) => sendNotification(message, chatId).then(() => true),
+    send: (message, chatId) =>
+      telegramSender ? telegramSender.send(message, chatId) : Promise.resolve(false),
   };
 
   return { repo, dateCache: dateCacheAdapter, notifications };

@@ -1,6 +1,4 @@
 import { createMonitorContext } from '../composition/createMonitorContext';
-import { initializeTelegram, sendNotification } from '../lib/telegram';
-import { setSheetsQuotaNotifier } from '../lib/sheets';
 import { UserBotManager } from '../lib/userBotManager';
 import { logger } from '../lib/logger';
 import { log, isSocketHangupError, formatErrorForLog } from '../lib/utils';
@@ -22,13 +20,12 @@ export async function monitorCommand(options: MonitorCommandOptions = {}): Promi
     const { config, users, cacheEntries, repo, dateCache, notifications } = ctx;
     const managerDeps = { repo, dateCache, notifications };
 
-    initializeTelegram(config.telegramBotToken ?? '', config.telegramManagerChatId ?? '');
-    setSheetsQuotaNotifier((event) => {
+    repo.setQuotaNotifier((event) => {
       const msg =
         event === 'exceeded'
           ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'
           : '✅ <b>Google Sheets restored</b>. Operations resumed.';
-      sendNotification(msg, config.telegramManagerChatId ?? '').catch((err) => {
+      notifications.send(msg, config.telegramManagerChatId ?? '').catch((err) => {
         log(`Failed to send quota notification: ${formatErrorForLog(err)}`);
       });
     });

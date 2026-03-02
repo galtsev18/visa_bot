@@ -4,7 +4,7 @@ This guide will help you set up the multi-user visa bot system step by step.
 
 ## Prerequisites
 
-- Node.js 16+ installed
+- Node.js 18+ installed
 - A Google account
 - A Telegram account
 - Access to https://ais.usvisa-info.com/
@@ -92,7 +92,7 @@ timestamp | user_email | date_attempted | result | reason | old_date | new_date
 
 1. Run the utility command:
    ```bash
-   node src/index.js get-chat-id
+   npm start -- get-chat-id
    ```
 2. Send any message to your bot on Telegram
 3. Copy the chat ID that's displayed
@@ -160,7 +160,7 @@ In the **Users** sheet, add rows for each user:
 
 1. Start the monitor:
    ```bash
-   node src/index.js monitor
+   npm start -- monitor
    ```
 
 2. Check the logs to see:
@@ -213,14 +213,14 @@ Once everything is set up:
 
 ```bash
 # Get Telegram chat ID (one-time setup)
-node src/index.js get-chat-id
+npm start -- get-chat-id
 
 # Start multi-user monitoring
-node src/index.js monitor
+npm start -- monitor
 
 # Single-user mode (legacy)
-node src/index.js bot -c 2024-06-15
+npm start -- bot -c 2024-06-15
 
 # Show help
-node src/index.js --help
+npm start -- --help
 ```

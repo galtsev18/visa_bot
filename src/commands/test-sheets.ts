@@ -104,7 +104,7 @@ export async function testSheetsCommand(): Promise<void> {
       log(e.stack);
     }
 
-    const errMsg = e?.message ?? '';
+    const errMsg = formatErrorForLog(e);
     if (errMsg.includes('credentials') || errMsg.includes('ENOENT')) {
       log('\n🔧 Troubleshooting - Credentials:');
       log('1. Check that GOOGLE_CREDENTIALS_PATH points to a valid JSON file');

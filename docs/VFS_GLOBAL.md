@@ -24,10 +24,10 @@ The VFS site may show a **Cloudflare** security page (“Performing security ver
 Test and debug:
 
 ```bash
-node src/index.js test-vfs-captcha           # detect Cloudflare / captcha type
-node src/index.js test-vfs-captcha --browser # use Puppeteer to pass JS-only Cloudflare, then show login form/captcha
-node src/index.js test-vfs-captcha --solve   # solve Turnstile (if sitekey found) and try to pass
-node src/index.js test-vfs-captcha --browser --solve   # open in browser, intercept Cloudflare Turnstile params, solve via 2Captcha, then get login page
+npm start -- test-vfs-captcha           # detect Cloudflare / captcha type
+npm start -- test-vfs-captcha --browser  # use Puppeteer to pass JS-only Cloudflare, then show login form/captcha
+npm start -- test-vfs-captcha --solve   # solve Turnstile (if sitekey found) and try to pass
+npm start -- test-vfs-captcha --browser --solve   # open in browser, intercept Cloudflare Turnstile params, solve via 2Captcha, then get login page
 ```
 
 For `--browser`, install Puppeteer (optional): `npm install puppeteer`. Use `--browser --visible` on a machine with a display to open a real Chrome window; Cloudflare often passes in that case. In headless mode (e.g. on a server), Cloudflare frequently does **not** complete the challenge.
@@ -77,11 +77,11 @@ To finish integration you need to:
 1. Open https://visa.vfsglobal.com/rus/en/fra/login and log in manually.
 2. Open DevTools → Network and go to the appointment/calendar flow.
 3. Find the API calls that return available dates and time slots (and the booking POST).
-4. Update `src/lib/providers/vfsglobal.js`:
+4. Update `src/lib/providers/vfsglobal.ts`:
    - Set the correct URLs and query/body parameters in `checkAvailableDate`, `checkAvailableTime`, and `book`.
    - Map the response JSON to date strings (YYYY-MM-DD) and time strings.
 
-Form field names on the login page may differ; the client tries common names (`email`, `Email`, `username`, `password`, etc.). If login fails, inspect the HTML and adjust the selectors in `vfsglobal.js`.
+Form field names on the login page may differ; the client tries common names (`email`, `Email`, `username`, `password`, etc.). If login fails, inspect the HTML and adjust the selectors in `vfsglobal.ts`.
 
 ## Summary
 

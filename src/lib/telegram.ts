@@ -1,7 +1,57 @@
-import TelegramBot from 'node-telegram-bot-api';
-import { log } from './utils';
+import { log, formatErrorForLog } from './utils';
 
-let bot: TelegramBot | null = null;
+const TELEGRAM_API = 'https://api.telegram.org';
+
+export interface TelegramSender {
+  send(message: string, chatId: string): Promise<boolean>;
+}
+
+/**
+ * Create a Telegram sender (no global state). Uses Bot API via fetch, like get-chat-id.
+ */
+export function createTelegramSender(
+  token: string,
+  defaultChatId: string
+): TelegramSender | null {
+  const cleanToken = token?.trim().replace(/^["']|["']$/g, '');
+  const chatId = String(defaultChatId).trim();
+  if (!cleanToken || !chatId) {
+    log('Telegram not initialized: missing token or chat ID');
+    return null;
+  }
+  log(`Telegram sender created for chat ID: ${chatId}`);
+  return {
+    async send(message: string, targetChatId?: string): Promise<boolean> {
+      const id = (targetChatId && String(targetChatId).trim()) || chatId;
+      if (!id) {
+        log('Telegram: no chat ID, message not sent');
+        return false;
+      }
+      try {
+        const url = `${TELEGRAM_API}/bot${cleanToken}/sendMessage`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: id,
+            text: message,
+            parse_mode: 'HTML',
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+        if (!data.ok) {
+          log(`Telegram send failed: ${data.description ?? res.status}`);
+          return false;
+        }
+        log('Telegram notification sent');
+        return true;
+      } catch (error) {
+        log(`Failed to send Telegram notification: ${formatErrorForLog(error)}`);
+        return false;
+      }
+    },
+  };
+}
 
 export interface UserLike {
   email: string;
@@ -16,47 +66,6 @@ export interface MonitorConfigLike {
 export interface CacheStatsLike {
   total: number;
   providers: Record<string, { entries: number; available: number }>;
-}
-
-/**
- * Initialize Telegram bot
- */
-export function initializeTelegram(token: string, managerChatId: string): TelegramBot | null {
-  if (!token || !managerChatId) {
-    log('Telegram not initialized: missing token or chat ID');
-    return null;
-  }
-
-  try {
-    bot = new TelegramBot(token, { polling: false });
-    log(`Telegram bot initialized for chat ID: ${managerChatId}`);
-    return bot;
-  } catch (error) {
-    log(`Failed to initialize Telegram bot: ${(error as Error).message}`);
-    return null;
-  }
-}
-
-/**
- * Send a notification to the manager
- */
-export async function sendNotification(
-  message: string,
-  managerChatId: string
-): Promise<boolean> {
-  if (!bot || !managerChatId) {
-    log('Telegram not available, message not sent: ' + message);
-    return false;
-  }
-
-  try {
-    await bot.sendMessage(managerChatId, message, { parse_mode: 'HTML' });
-    log('Telegram notification sent');
-    return true;
-  } catch (error) {
-    log(`Failed to send Telegram notification: ${(error as Error).message}`);
-    return false;
-  }
 }
 
 /**
@@ -81,7 +90,7 @@ export function formatBookingSuccess(
  * Format an error notification
  */
 export function formatError(user: UserLike, error: Error | string): string {
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorMessage = formatErrorForLog(error);
   return `
 <b>❌ Error for User</b>
 

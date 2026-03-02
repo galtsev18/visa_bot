@@ -4,7 +4,7 @@ Follow these steps to get the multi-user visa bot running:
 
 ## Prerequisites Checklist
 
-- [ ] Node.js 16+ installed
+- [ ] Node.js 18+ installed
 - [ ] Google account
 - [ ] Telegram account
 - [ ] Access to https://ais.usvisa-info.com/
@@ -40,7 +40,7 @@ npm install
 
 2. **Get Your Chat ID**
    ```bash
-   node src/index.js get-chat-id
+   npm start -- get-chat-id
    ```
    - Send a message to your bot
    - Copy the chat ID displayed
@@ -65,7 +65,7 @@ npm install
 ## Step 5: Test Google Sheets Connection
 
 ```bash
-node src/index.js test-sheets
+npm start -- test-sheets
 ```
 
 This will:
@@ -103,7 +103,7 @@ This will:
 ## Step 7: Start Monitoring
 
 ```bash
-node src/index.js monitor
+npm start -- monitor
 ```
 
 The bot will:
@@ -117,16 +117,16 @@ The bot will:
 
 ```bash
 # Test Google Sheets connection
-node src/index.js test-sheets
+npm start -- test-sheets
 
 # Get Telegram chat ID
-node src/index.js get-chat-id
+npm start -- get-chat-id
 
 # Start monitoring (main command)
-node src/index.js monitor
+npm start -- monitor
 
 # Show help
-node src/index.js --help
+npm start -- --help
 ```
 
 ## Troubleshooting

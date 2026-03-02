@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import cheerio from 'cheerio';
 import { log, formatErrorForLog } from '../utils';
 import { solveImageCaptcha, solveRecaptchaV2, solveTurnstile } from '../captcha';

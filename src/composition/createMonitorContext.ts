@@ -66,7 +66,6 @@ export async function createMonitorContext(
     token: String(config.telegramBotToken ?? '').trim(),
     defaultChatId: chatId,
   });
-  notifications.init();
 
   const { users, cacheEntries } = await repo.getInitialData();
 

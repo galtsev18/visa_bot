@@ -11,7 +11,7 @@
 | ------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Дублирование AIS-пути     | client vs providers/ais            | Частично решено: при composition root используется провайдер.                                               |
 | Единый провайдер          | Bot, UserBotManager                | Решено: фабрика и ProviderBackedClient.                                                                     |
-| Глобальное состояние      | sheets, dateCache, telegram        | Частично решено: dateCache — createDateCache() + экземпляр в composition root; sheets/telegram — актуально. |
+| Глобальное состояние      | sheets, dateCache, telegram        | Решено: dateCache — createDateCache(); telegram — createTelegramSender(); sheets — состояние в одном объекте state, инициализация через initializeSheets(). |
 | Смешение слоёв            | UserBotManager при отсутствии deps | Решено: один путь через composition root; deps обязательны.                                                 |
 | Конфиг из двух источников | config + Settings                  | Решено: MergedConfigProvider, getConfig(): Promise.                                                         |
 | Типизация                 | lib, commands                      | Решено: весь src на TypeScript.                                                                             |
