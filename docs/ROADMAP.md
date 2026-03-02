@@ -21,6 +21,7 @@
   - Добавить интеграционный сценарий: один цикл monitor с моком только одного адаптера (например, только repo или только notifications), остальное реальное — по необходимости.
   - Контрактные тесты: небольшие тесты, проверяющие, что моки портов (UserRepository, DateCache, NotificationSender) соответствуют ожидаемому использованию в use cases (сигнатуры и поведение при граничных данных).
 - **Критерий:** новые сценарии в `test/integration/` или `test/contracts/`; при изменении портов — обновить тесты и CONTRACTS.
+- **Выполнено:** контрактные тесты в `test/contracts/` (UserRepository, NotificationSender, DateCache); интеграционный один цикл — в `test/integration/monitor-one-cycle.test.ts` (все порты мокаются, т.к. в CI нет реальных Sheets/Telegram).
 
 ### 3. Выделение слоя domain (средний риск, рефакторинг)
 

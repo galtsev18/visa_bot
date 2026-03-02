@@ -9,7 +9,7 @@
     "start:dist": "node dist/index.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/domain/user.test.ts test/domain/userRotation.test.ts test/application/startMonitor.test.ts test/application/checkUserWithCache.test.ts test/application/attemptBooking.test.ts test/integration/monitor-one-cycle.test.ts",
+    "test": "node --import tsx --test test/domain/user.test.ts test/domain/userRotation.test.ts test/application/startMonitor.test.ts test/application/checkUserWithCache.test.ts test/application/attemptBooking.test.ts test/contracts/userRepository.contract.test.ts test/contracts/notificationSender.contract.test.ts test/contracts/dateCache.contract.test.ts test/integration/monitor-one-cycle.test.ts",
     "lint": "eslint src eslint.config.js --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.{ts,json,md}\"",

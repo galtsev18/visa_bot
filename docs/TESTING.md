@@ -38,6 +38,16 @@
 - Моки портов должны соответствовать интерфейсам из `src/ports/` (см. [CONTRACTS.md](CONTRACTS.md)). При изменении порта все тесты, использующие мок этого порта, должны быть обновлены.
 - Рекомендуется использовать один и тот же объект-мок для нескольких вызовов в сценарии (например, `repo.getActiveUsers` возвращает заданный список пользователей), чтобы тест оставался читаемым.
 
+### Контрактные тесты (test/contracts/)
+
+Небольшие тесты, проверяющие, что use cases вызывают порты с ожидаемыми сигнатурами и форматами данных (см. [ROADMAP.md](ROADMAP.md) п. 2):
+
+- **userRepository.contract.test.ts** — вызовы `UserRepository`: `updateUserCurrentDate`, `updateUserLastBooked`, `logBookingAttempt` из `attemptBooking` (успех и отсутствие bot).
+- **notificationSender.contract.test.ts** — вызов `sendNotification(msg, chatId)` из `startMonitor` с непустым сообщением и chatId из конфига.
+- **dateCache.contract.test.ts** — вызовы `getAvailableDates(provider)`, `isCacheStale(date, ttl, provider)`, `isDateAvailable(date, provider)` из `checkUserWithCache`.
+
+При изменении портов или сценариев контрактные тесты нужно обновить вместе с [CONTRACTS.md](CONTRACTS.md).
+
 ---
 
 ## 5. Запуск и CI
