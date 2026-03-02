@@ -1,6 +1,7 @@
 import type { DateCacheClient } from '../ports/DateCache';
 import type { RefreshDatesOptions } from '../ports/DateCache';
-import { log, sleep, isSocketHangupError, formatErrorForLog } from './utils';
+import { logger } from './logger';
+import { sleep, isSocketHangupError, formatErrorForLog } from './utils';
 import { readAvailableDatesCache, updateAvailableDate } from './sheets';
 
 interface CacheEntry {
@@ -61,9 +62,9 @@ export async function initializeCache(
       cache.set(key, toCacheEntry(entry));
     }
 
-    log(`Initialized cache with ${cache.size} entries`);
+    logger.info(`Initialized cache with ${cache.size} entries`);
   } catch (error: unknown) {
-    log(`Failed to initialize cache: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to initialize cache: ${formatErrorForLog(error)}`);
   }
 }
 
@@ -116,7 +117,7 @@ export function updateDate(
   });
 
   updateAvailableDate(date, available, times).catch((err: unknown) => {
-    log(`Failed to update cache in Sheets for ${date}: ${formatErrorForLog(err)}`);
+    logger.error(`Failed to update cache in Sheets for ${date}: ${formatErrorForLog(err)}`);
   });
 }
 
@@ -157,7 +158,7 @@ export async function refreshDate(
     const available = time !== null && time !== undefined;
     const times = available ? [time as string] : [];
     updateDate(date, available, times, ttl, provider);
-    log(`Refreshed cache for date ${date}: available=${available}`);
+    logger.info(`Refreshed cache for date ${date}: available=${available}`);
     return { available, times };
   };
 
@@ -165,19 +166,19 @@ export async function refreshDate(
     return await tryFetch();
   } catch (error: unknown) {
     if (isSocketHangupError(error)) {
-      log(
+      logger.info(
         `Rate limit / socket hang up for date ${date}, backing off ${rateLimitBackoffSec}s before retry...`
       );
       await sleep(rateLimitBackoffSec);
       try {
         return await tryFetch();
       } catch (retryErr: unknown) {
-        log(`Failed to refresh date ${date} (after retry): ${formatErrorForLog(retryErr)}`);
+        logger.error(`Failed to refresh date ${date} (after retry): ${formatErrorForLog(retryErr)}`);
         updateDate(date, false, [], ttl, provider);
         return { available: false, times: [] };
       }
     }
-    log(`Failed to refresh date ${date}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to refresh date ${date}: ${formatErrorForLog(error)}`);
     updateDate(date, false, [], ttl, provider);
     return { available: false, times: [] };
   }
@@ -199,9 +200,9 @@ export async function refreshAllDates(
   const rateLimitBackoffSec = options.rateLimitBackoffSec ?? 30;
 
   try {
-    log('Fetching list of available dates from API...');
+    logger.info('Fetching list of available dates from API...');
     const heartbeatTimer = setInterval(() => {
-      log('Still fetching available dates from API...');
+      logger.info('Still fetching available dates from API...');
     }, HEARTBEAT_INTERVAL_MS);
     let dates: string[] | undefined;
     try {
@@ -210,10 +211,10 @@ export async function refreshAllDates(
       clearInterval(heartbeatTimer);
     }
     if (!dates || dates.length === 0) {
-      log('No dates available from API');
+      logger.info('No dates available from API');
       return [];
     }
-    log(
+    logger.info(
       `Received ${dates.length} dates. Checking availability (delay ${requestDelaySec}s between requests)...`
     );
     const availableDates: string[] = [];
@@ -233,16 +234,16 @@ export async function refreshAllDates(
       if (result.available) availableDates.push(date);
       const n = i + 1;
       if (n % PROGRESS_STEP === 0 || n === total) {
-        log(`Checking dates: ${n}/${total}...`);
+        logger.info(`Checking dates: ${n}/${total}...`);
       }
       if (n < total && requestDelaySec > 0) {
         await sleep(requestDelaySec);
       }
     }
-    log(`Refreshed cache: ${availableDates.length} dates available`);
+    logger.info(`Refreshed cache: ${availableDates.length} dates available`);
     return availableDates;
   } catch (error: unknown) {
-    log(`Failed to refresh all dates: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to refresh all dates: ${formatErrorForLog(error)}`);
     return [];
   }
 }
@@ -289,9 +290,9 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
         const key = cacheKey((entry.provider as string) || 'ais', entry.date);
         cacheLocal.set(key, toCacheEntry(entry));
       }
-      log(`Initialized cache with ${cacheLocal.size} entries`);
+      logger.info(`Initialized cache with ${cacheLocal.size} entries`);
     } catch (error: unknown) {
-      log(`Failed to initialize cache: ${formatErrorForLog(error)}`);
+      logger.error(`Failed to initialize cache: ${formatErrorForLog(error)}`);
     }
   }
 
@@ -358,7 +359,7 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
       validUntil,
     });
     persist(date, available, times, 134).catch((err: unknown) => {
-      log(`Failed to update cache in Sheets for ${date}: ${formatErrorForLog(err)}`);
+      logger.error(`Failed to update cache in Sheets for ${date}: ${formatErrorForLog(err)}`);
     });
   }
 
@@ -378,24 +379,24 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
       const available = time !== null && time !== undefined;
       const times = available ? [time as string] : [];
       update(date, available, times, ttl, provider);
-      log(`Refreshed cache for date ${date}: available=${available}`);
+      logger.info(`Refreshed cache for date ${date}: available=${available}`);
       return { available, times };
     };
     try {
       return await tryFetch();
     } catch (error: unknown) {
       if (isSocketHangupError(error)) {
-        log(`Rate limit / socket hang up for date ${date}, backing off ${rateLimitBackoffSec}s before retry...`);
+        logger.info(`Rate limit / socket hang up for date ${date}, backing off ${rateLimitBackoffSec}s before retry...`);
         await sleep(rateLimitBackoffSec);
         try {
           return await tryFetch();
         } catch (retryErr: unknown) {
-          log(`Failed to refresh date ${date} (after retry): ${formatErrorForLog(retryErr)}`);
+          logger.error(`Failed to refresh date ${date} (after retry): ${formatErrorForLog(retryErr)}`);
           update(date, false, [], ttl, provider);
           return { available: false, times: [] };
         }
       }
-      log(`Failed to refresh date ${date}: ${formatErrorForLog(error)}`);
+      logger.error(`Failed to refresh date ${date}: ${formatErrorForLog(error)}`);
       update(date, false, [], ttl, provider);
       return { available: false, times: [] };
     }
@@ -413,9 +414,9 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
     const requestDelaySec = opts.requestDelaySec ?? 2;
     const rateLimitBackoffSec = opts.rateLimitBackoffSec ?? 30;
     try {
-      log('Fetching list of available dates from API...');
+      logger.info('Fetching list of available dates from API...');
       const heartbeatTimer = setInterval(
-        () => log('Still fetching available dates from API...'),
+        () => logger.info('Still fetching available dates from API...'),
         HEARTBEAT_INTERVAL_MS
       );
       let dates: string[] | undefined;
@@ -425,10 +426,10 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
         clearInterval(heartbeatTimer);
       }
       if (!dates || dates.length === 0) {
-        log('No dates available from API');
+        logger.info('No dates available from API');
         return [];
       }
-      log(`Received ${dates.length} dates. Checking availability (delay ${requestDelaySec}s between requests)...`);
+      logger.info(`Received ${dates.length} dates. Checking availability (delay ${requestDelaySec}s between requests)...`);
       const availableDates: string[] = [];
       const total = dates.length;
       for (let i = 0; i < dates.length; i++) {
@@ -445,13 +446,13 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
         );
         if (result.available) availableDates.push(date);
         const n = i + 1;
-        if (n % PROGRESS_STEP === 0 || n === total) log(`Checking dates: ${n}/${total}...`);
+        if (n % PROGRESS_STEP === 0 || n === total) logger.info(`Checking dates: ${n}/${total}...`);
         if (n < total && requestDelaySec > 0) await sleep(requestDelaySec);
       }
-      log(`Refreshed cache: ${availableDates.length} dates available`);
+      logger.info(`Refreshed cache: ${availableDates.length} dates available`);
       return availableDates;
     } catch (error: unknown) {
-      log(`Failed to refresh all dates: ${formatErrorForLog(error)}`);
+      logger.error(`Failed to refresh all dates: ${formatErrorForLog(error)}`);
       return [];
     }
   }

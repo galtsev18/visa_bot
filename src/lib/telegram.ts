@@ -1,4 +1,5 @@
-import { log, formatErrorForLog } from './utils';
+import { logger } from './logger';
+import { formatErrorForLog } from './utils';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -16,15 +17,15 @@ export function createTelegramSender(
   const cleanToken = token?.trim().replace(/^["']|["']$/g, '');
   const chatId = String(defaultChatId).trim();
   if (!cleanToken || !chatId) {
-    log('Telegram not initialized: missing token or chat ID');
+    logger.warn('Telegram not initialized: missing token or chat ID');
     return null;
   }
-  log(`Telegram sender created for chat ID: ${chatId}`);
+  logger.info(`Telegram sender created for chat ID: ${chatId}`);
   return {
     async send(message: string, targetChatId?: string): Promise<boolean> {
       const id = (targetChatId && String(targetChatId).trim()) || chatId;
       if (!id) {
-        log('Telegram: no chat ID, message not sent');
+        logger.warn('Telegram: no chat ID, message not sent');
         return false;
       }
       try {
@@ -40,13 +41,13 @@ export function createTelegramSender(
         });
         const data = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
         if (!data.ok) {
-          log(`Telegram send failed: ${data.description ?? res.status}`);
+          logger.error(`Telegram send failed: ${data.description ?? res.status}`);
           return false;
         }
-        log('Telegram notification sent');
+        logger.info('Telegram notification sent');
         return true;
       } catch (error) {
-        log(`Failed to send Telegram notification: ${formatErrorForLog(error)}`);
+        logger.error(`Failed to send Telegram notification: ${formatErrorForLog(error)}`);
         return false;
       }
     },

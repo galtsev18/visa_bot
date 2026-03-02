@@ -1,5 +1,5 @@
 import type { User } from '../ports/User';
-import { log } from './utils';
+import { logger } from './logger';
 
 export function getNextUser(users: User[], cooldown = 30): User | null {
   if (!users || users.length === 0) return null;
@@ -32,7 +32,7 @@ export function getNextUser(users: User[], cooldown = 30): User | null {
 
   usersWithPriority.sort((a, b) => b.priority - a.priority);
   const selected = usersWithPriority[0];
-  log(`Selected user ${selected.user.email} with priority ${selected.priority.toFixed(2)}`);
+  logger.info(`Selected user ${selected.user.email} with priority ${selected.priority.toFixed(2)}`);
 
   return selected.user;
 }

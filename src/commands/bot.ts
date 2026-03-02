@@ -1,6 +1,7 @@
 import { Bot } from '../lib/bot';
 import { getConfig } from '../lib/config';
-import { log, sleep, isSocketHangupError, formatErrorForLog } from '../lib/utils';
+import { logger } from '../lib/logger';
+import { sleep, isSocketHangupError, formatErrorForLog } from '../lib/utils';
 
 const COOLDOWN = 3600; // 1 hour in seconds
 
@@ -18,18 +19,18 @@ export async function botCommand(options: BotCommandOptions): Promise<void> {
   const targetDate = options.target;
   const minDate = options.min;
 
-  log(`Initializing with current date ${currentBookedDate}`);
+  logger.info(`Initializing with current date ${currentBookedDate}`);
 
   if (options.dryRun) {
-    log(`[DRY RUN MODE] Bot will only log what would be booked without actually booking`);
+    logger.info(`[DRY RUN MODE] Bot will only log what would be booked without actually booking`);
   }
 
   if (targetDate) {
-    log(`Target date: ${targetDate}`);
+    logger.info(`Target date: ${targetDate}`);
   }
 
   if (minDate) {
-    log(`Minimum date: ${minDate}`);
+    logger.info(`Minimum date: ${minDate}`);
   }
 
   try {
@@ -54,7 +55,7 @@ export async function botCommand(options: BotCommandOptions): Promise<void> {
           };
 
           if (targetDate && availableDate <= targetDate) {
-            log(`Target date reached! Successfully booked appointment on ${availableDate}`);
+            logger.info(`Target date reached! Successfully booked appointment on ${availableDate}`);
             process.exit(0);
           }
         }
@@ -65,10 +66,10 @@ export async function botCommand(options: BotCommandOptions): Promise<void> {
   } catch (err) {
     const errMsg = formatErrorForLog(err);
     if (isSocketHangupError(err)) {
-      log(`Socket hangup error: ${errMsg}. Trying again after ${COOLDOWN} seconds...`);
+      logger.info(`Socket hangup error: ${errMsg}. Trying again after ${COOLDOWN} seconds...`);
       await sleep(COOLDOWN);
     } else {
-      log(`Session/authentication error: ${errMsg}. Retrying immediately...`);
+      logger.info(`Session/authentication error: ${errMsg}. Retrying immediately...`);
     }
     return botCommand(options);
   }

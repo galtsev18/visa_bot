@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
-import { log, sleep, formatErrorForLog } from './utils';
+import { logger } from './logger';
+import { sleep, formatErrorForLog } from './utils';
 import { User } from './user';
 
 type SheetsV4 = ReturnType<typeof google.sheets>;
@@ -95,7 +96,7 @@ async function withQuotaRetry<T>(s: SheetsClientState, fn: () => Promise<T>): Pr
       s.quotaNotifier('exceeded');
       s.quotaExceededNotified = true;
     }
-    log(`Sheets API quota exceeded. Waiting ${QUOTA_RETRY_WAIT_SEC}s before retry...`);
+    logger.info(`Sheets API quota exceeded. Waiting ${QUOTA_RETRY_WAIT_SEC}s before retry...`);
     await sleep(QUOTA_RETRY_WAIT_SEC);
     const result = await fn();
     if (s.quotaNotifier) {
@@ -136,7 +137,7 @@ async function ensureSheetsExist(s: SheetsClientState): Promise<void> {
   const required = [SHEET_USERS, SHEET_CACHE, SHEET_LOGS, SHEET_SETTINGS];
   const missing = required.filter((name) => !existingTitles.includes(name));
   if (missing.length === 0) return;
-  log(`Creating ${missing.length} sheet(s): ${missing.join(', ')}...`);
+  logger.info(`Creating ${missing.length} sheet(s): ${missing.join(', ')}...`);
   await s.sheets!.spreadsheets.batchUpdate({
     spreadsheetId: s.spreadsheetId!,
     requestBody: {
@@ -145,7 +146,7 @@ async function ensureSheetsExist(s: SheetsClientState): Promise<void> {
       })),
     },
   });
-  missing.forEach((name) => log(`✅ Created sheet "${name}"`));
+  missing.forEach((name) => logger.info(`✅ Created sheet "${name}"`));
 }
 
 const USERS_HEADERS = [
@@ -230,22 +231,22 @@ async function ensureHeaders(s: SheetsClientState): Promise<void> {
           data: updates,
         },
       });
-      updates.forEach((u) => log(`Created headers for ${u.range.split('!')[0]}`));
+      updates.forEach((u) => logger.info(`Created headers for ${u.range.split('!')[0]}`));
     }
 
-    log('All sheet headers verified/created');
+    logger.info('All sheet headers verified/created');
   } catch (error) {
     const e = error as { message?: string; response?: { status?: number } };
     if (
       e.message?.includes('Unable to parse range') ||
       e.response?.status === 400
     ) {
-      log('⚠️  Warning: One or more sheets may not exist.');
-      log(
+      logger.warn('⚠️  Warning: One or more sheets may not exist.');
+      logger.info(
         'Required sheets: 1. "Users"  2. "Available Dates Cache"  3. "Booking Attempts Log"  4. "Settings"'
       );
     } else {
-      log(`⚠️  Warning: Failed to ensure headers: ${formatErrorForLog(error)}`);
+      logger.warn(`⚠️  Warning: Failed to ensure headers: ${formatErrorForLog(error)}`);
     }
   }
 }
@@ -265,14 +266,14 @@ export async function createSheetsClient(
   });
   s.sheets = google.sheets({ version: 'v4', auth });
   s.spreadsheetId = sheetId;
-  log('Google Sheets initialized');
+  logger.info('Google Sheets initialized');
 
   await withQuotaRetry(s, async () => {
     await ensureSheetsExist(s);
     await ensureHeaders(s);
     return true;
   }).catch((error) => {
-    log(`Failed to initialize Google Sheets: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to initialize Google Sheets: ${formatErrorForLog(error)}`);
     throw error;
   });
 
@@ -353,7 +354,7 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
     const headerKey = String(rows[0][0] ?? '').toLowerCase().trim();
     const headerVal = String(rows[0][1] ?? '').toLowerCase().trim();
     if (headerKey !== 'key' || headerVal !== 'value') {
-      log('Settings sheet: invalid structure (expected key, value). Fixing headers.');
+      logger.info('Settings sheet: invalid structure (expected key, value). Fixing headers.');
       await s.sheets!.spreadsheets.values.update({
         spreadsheetId: s.spreadsheetId!,
         range: `${SHEET_SETTINGS}!1:1`,
@@ -383,7 +384,7 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: appendRows },
       });
-      log(`Settings: added missing keys: ${missingKeys.join(', ')}`);
+      logger.info(`Settings: added missing keys: ${missingKeys.join(', ')}`);
       for (const k of missingKeys) {
         const mapping = SETTINGS_KEY_MAP[k];
         const raw = SETTINGS_DEFAULT_VALUES[k] ?? '';
@@ -412,11 +413,11 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
       overrides[mapping.configKey] = value;
     }
     if (Object.keys(overrides).length > 0) {
-      log(`Settings from sheet: ${Object.keys(overrides).join(', ')}`);
+      logger.info(`Settings from sheet: ${Object.keys(overrides).join(', ')}`);
     }
     return overrides;
   }).catch((error) => {
-    log(`Failed to read Settings sheet: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to read Settings sheet: ${formatErrorForLog(error)}`);
     return {};
   });
 }
@@ -453,15 +454,15 @@ async function readUsersImpl(s: SheetsClientState): Promise<User[]> {
           users.push(user);
           s.emailToRowIndex.set(user.email, oneBasedRow);
         } catch (error) {
-          log(`Failed to parse user ${userData.email}: ${formatErrorForLog(error)}`);
+          logger.error(`Failed to parse user ${userData.email}: ${formatErrorForLog(error)}`);
         }
       }
     }
 
-    log(`Read ${users.length} active users from Google Sheets`);
+    logger.info(`Read ${users.length} active users from Google Sheets`);
     return users;
   }).catch((error) => {
-    log(`Failed to read users from Google Sheets: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to read users from Google Sheets: ${formatErrorForLog(error)}`);
     throw error;
   });
 }
@@ -503,7 +504,7 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
           users.push(user);
           s.emailToRowIndex.set(user.email, oneBasedRow);
         } catch (err) {
-          log(`Failed to parse user ${userData.email}: ${formatErrorForLog(err)}`);
+          logger.error(`Failed to parse user ${userData.email}: ${formatErrorForLog(err)}`);
         }
       }
     }
@@ -523,7 +524,7 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
           try {
             entry.times_available = JSON.parse(entry.times_available as string);
           } catch (err) {
-            log(`Parse times_available JSON failed: ${formatErrorForLog(err)}`);
+            logger.info(`Parse times_available JSON failed: ${formatErrorForLog(err)}`);
             entry.times_available = [];
           }
         }
@@ -535,10 +536,10 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
       }
     }
 
-    log(`Initial data: ${users.length} users, ${cacheEntries.length} cache entries (1 batch read)`);
+    logger.info(`Initial data: ${users.length} users, ${cacheEntries.length} cache entries (1 batch read)`);
     return { users, cacheEntries };
   }).catch((error) => {
-    log(`Failed to get initial data: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to get initial data: ${formatErrorForLog(error)}`);
     throw error;
   });
 }
@@ -570,7 +571,7 @@ async function readAvailableDatesCacheImpl(s: SheetsClientState): Promise<CacheE
         try {
           entry.times_available = JSON.parse(entry.times_available as string);
         } catch (err) {
-          log(`Parse times_available JSON failed: ${formatErrorForLog(err)}`);
+          logger.info(`Parse times_available JSON failed: ${formatErrorForLog(err)}`);
           entry.times_available = [];
         }
       }
@@ -585,10 +586,10 @@ async function readAvailableDatesCacheImpl(s: SheetsClientState): Promise<CacheE
       }
     }
 
-    log(`Read ${cache.length} cache entries from Google Sheets`);
+    logger.info(`Read ${cache.length} cache entries from Google Sheets`);
     return cache;
   }).catch((error) => {
-    log(`Failed to read cache from Google Sheets: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to read cache from Google Sheets: ${formatErrorForLog(error)}`);
     return [];
   });
 }
@@ -654,9 +655,9 @@ async function updateAvailableDateImpl(
       }
     }
 
-    log(`Updated cache for date ${date}: available=${available}`);
+    logger.info(`Updated cache for date ${date}: available=${available}`);
   }).catch((error) => {
-    log(`Failed to update cache for date ${date}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to update cache for date ${date}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -680,9 +681,9 @@ async function logBookingAttemptImpl(s: SheetsClientState, attempt: BookingAttem
       requestBody: { values: [values] },
     });
 
-    log(`Logged booking attempt: ${attempt.user_email} - ${attempt.result}`);
+    logger.info(`Logged booking attempt: ${attempt.user_email} - ${attempt.result}`);
   }).catch((error) => {
-    log(`Failed to log booking attempt: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to log booking attempt: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -705,7 +706,7 @@ async function getColumnIndex(s: SheetsClientState, headerName: string): Promise
     }
     return -1;
   } catch (error) {
-    log(`Failed to get column index for ${headerName}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to get column index for ${headerName}: ${formatErrorForLog(error)}`);
     return -1;
   }
 }
@@ -758,7 +759,7 @@ async function updateUserLastCheckedImpl(
       });
     }
   }).catch((error) => {
-    log(`Failed to update last_checked for ${email}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to update last_checked for ${email}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -813,7 +814,7 @@ async function updateUserCurrentDateImpl(
       });
     }
   }).catch((error) => {
-    log(`Failed to update current_date for ${email}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to update current_date for ${email}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -868,7 +869,7 @@ async function updateUserLastBookedImpl(
       });
     }
   }).catch((error) => {
-    log(`Failed to update last_booked for ${email}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to update last_booked for ${email}: ${formatErrorForLog(error)}`);
   });
 }
 
@@ -920,7 +921,7 @@ async function updateUserPriorityImpl(
       });
     }
   }).catch((error) => {
-    log(`Failed to update priority for ${email}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to update priority for ${email}: ${formatErrorForLog(error)}`);
   });
 }
 

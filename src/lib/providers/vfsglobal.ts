@@ -1,5 +1,6 @@
 import cheerio from 'cheerio';
-import { log, formatErrorForLog } from '../utils';
+import { logger } from '../logger';
+import { formatErrorForLog } from '../utils';
 import { solveImageCaptcha, solveRecaptchaV2, solveTurnstile } from '../captcha';
 
 const VFS_BASE_URI = 'https://visa.vfsglobal.com';
@@ -57,7 +58,7 @@ export class VfsGlobalClient {
   }
 
   async login(): Promise<Record<string, string>> {
-    log('VFS Global: Loading login page...');
+    logger.info('VFS Global: Loading login page...');
     const loginUrl = `${this.baseUri}/login`;
     let res = await fetch(loginUrl, {
       headers: {
@@ -83,7 +84,7 @@ export class VfsGlobalClient {
       (isCloudflare ? $('[data-sitekey]').first().attr('data-sitekey') : null);
 
     if (isCloudflare && turnstileSiteKey) {
-      log('VFS Global: Cloudflare Turnstile challenge detected, solving...');
+      logger.info('VFS Global: Cloudflare Turnstile challenge detected, solving...');
       const token = this.captchaSolver
         ? await this.captchaSolver({
             type: 'turnstile',
@@ -183,7 +184,7 @@ export class VfsGlobalClient {
     const captchaImg = form.find('img.captcha, img[src*="captcha"], #captcha-image');
 
     if (recaptchaSiteKey) {
-      log('VFS Global: Solving reCAPTCHA...');
+      logger.info('VFS Global: Solving reCAPTCHA...');
       const token = this.captchaSolver
         ? await this.captchaSolver({
             type: 'recaptcha',
@@ -194,7 +195,7 @@ export class VfsGlobalClient {
       formData['g-recaptcha-response'] = token;
     } else if (captchaImg.length) {
       const src = captchaImg.attr('src') || '';
-      log('VFS Global: Solving image captcha...');
+      logger.info('VFS Global: Solving image captcha...');
       let imageBase64 = src;
       if (src.startsWith('http')) {
         const imgRes = await fetch(src, {
@@ -246,7 +247,7 @@ export class VfsGlobalClient {
       throw new Error('VFS Global login failed. Check credentials or captcha.');
     }
 
-    log('VFS Global: Login successful');
+    logger.info('VFS Global: Login successful');
     return {
       Cookie: finalCookie,
       'User-Agent':
@@ -281,7 +282,7 @@ export class VfsGlobalClient {
         .map((d) => (typeof d === 'string' ? d.slice(0, 10) : (d as { date?: string }).date ?? d))
         .filter(Boolean) as string[];
     } catch (e) {
-      log(`VFS checkAvailableDate not implemented or request failed: ${formatErrorForLog(e)}`);
+      logger.warn(`VFS checkAvailableDate not implemented or request failed: ${formatErrorForLog(e)}`);
       return [];
     }
   }
@@ -302,7 +303,7 @@ export class VfsGlobalClient {
       const times = Array.isArray(data) ? data : data.times ?? data.slots ?? [];
       return times[0] ? (typeof times[0] === 'string' ? times[0] : (times[0] as { time?: string }).time ?? times[0]) : null;
     } catch (e) {
-      log(`VFS checkAvailableTime not implemented or failed: ${formatErrorForLog(e)}`);
+      logger.warn(`VFS checkAvailableTime not implemented or failed: ${formatErrorForLog(e)}`);
       return null;
     }
   }

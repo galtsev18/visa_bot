@@ -1,4 +1,5 @@
-import { log, formatErrorForLog } from './utils';
+import { logger } from './logger';
+import { formatErrorForLog } from './utils';
 
 const TURNSTILE_INJECT_SCRIPT = `
 (function() {
@@ -64,11 +65,11 @@ export async function passCloudflareWithBrowser(
     puppeteer = extra.default as typeof puppeteer;
     useStealth = true;
   } catch (err) {
-    log(`puppeteer-extra not available, using plain puppeteer: ${formatErrorForLog(err)}`);
+    logger.warn(`puppeteer-extra not available, using plain puppeteer: ${formatErrorForLog(err)}`);
     try {
       puppeteer = (await import('puppeteer')) as typeof puppeteer;
     } catch (err2) {
-      log(`puppeteer import failed: ${formatErrorForLog(err2)}`);
+      logger.warn(`puppeteer import failed: ${formatErrorForLog(err2)}`);
       throw new Error(
         'Puppeteer is not installed. Install with: npm install puppeteer. ' +
           'For better Cloudflare pass rate on server: npm install puppeteer-extra puppeteer-extra-plugin-stealth'
@@ -144,7 +145,7 @@ export async function passCloudflareWithBrowser(
           }, token);
           captchaResolve!();
         } catch (err) {
-          log(`2Captcha Turnstile solve/apply failed: ${formatErrorForLog(err)}`);
+          logger.error(`2Captcha Turnstile solve/apply failed: ${formatErrorForLog(err)}`);
           captchaReject!(err);
         }
       });
@@ -166,7 +167,7 @@ export async function passCloudflareWithBrowser(
       try {
         await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 25000 });
       } catch (err) {
-        log(`Wait for navigation failed: ${formatErrorForLog(err)}`);
+        logger.error(`Wait for navigation failed: ${formatErrorForLog(err)}`);
         // navigation may have already happened or timed out
       }
     } else {
@@ -195,7 +196,7 @@ export async function passCloudflareWithBrowser(
         await page.screenshot({ path: options.screenshotPath, type: 'png' });
         screenshotPath = options.screenshotPath;
       } catch (err) {
-        log(`Screenshot failed: ${formatErrorForLog(err)}`);
+        logger.error(`Screenshot failed: ${formatErrorForLog(err)}`);
       }
     }
 

@@ -6,7 +6,8 @@ import {
   solveTurnstile,
 } from '../lib/captcha';
 import { passCloudflareWithBrowser } from '../lib/browserCloudflare';
-import { log, formatErrorForLog } from '../lib/utils';
+import { logger } from '../lib/logger';
+import { formatErrorForLog } from '../lib/utils';
 
 const VFS_LOGIN_URL = 'https://visa.vfsglobal.com/rus/en/fra/login';
 
@@ -38,22 +39,22 @@ export async function testVfsCaptchaCommand(
   if (useBrowser) {
     const headless = options.visible !== true;
     if (headless) {
-      log('Opening VFS login page in headless browser (Puppeteer)...');
-      log('On a server (no display), Cloudflare often does not pass in headless mode.');
+      logger.info('Opening VFS login page in headless browser (Puppeteer)...');
+      logger.info('On a server (no display), Cloudflare often does not pass in headless mode.');
     } else {
-      log('Opening VFS login page in visible browser (Puppeteer)...');
+      logger.info('Opening VFS login page in visible browser (Puppeteer)...');
     }
     try {
       const screenshotPath =
         options.screenshot === true ? 'vfs-page-screenshot.png' : (options.screenshot as string) ?? null;
       const use2Captcha = doSolve && !!captchaApiKey;
       if (doSolve && !captchaApiKey) {
-        log(
+        logger.info(
           '2Captcha API key not set (config or CAPTCHA_2CAPTCHA_API_KEY); Cloudflare challenge will not be solved via 2Captcha.'
         );
       }
       if (use2Captcha) {
-        log('Will try to solve Cloudflare Turnstile with 2Captcha after page load.');
+        logger.info('Will try to solve Cloudflare Turnstile with 2Captcha after page load.');
       }
       const result = await passCloudflareWithBrowser(VFS_LOGIN_URL, {
         timeout: 30000,
@@ -66,22 +67,22 @@ export async function testVfsCaptchaCommand(
       resUrl = result.url;
       cookiesFromBrowser = result.cookies;
       if (result.stealthUsed) {
-        log('Stealth plugin used (puppeteer-extra-plugin-stealth).');
+        logger.info('Stealth plugin used (puppeteer-extra-plugin-stealth).');
       }
       if (result.screenshotPath) {
         console.log(`\nScreenshot saved: ${result.screenshotPath}`);
       }
       if ((result.title || '').includes('Just a moment')) {
-        log(`Cloudflare challenge did not complete in time. Page title: ${result.title}`);
+        logger.info(`Cloudflare challenge did not complete in time. Page title: ${result.title}`);
       } else {
-        log(`Browser loaded. Page title: ${result.title}`);
+        logger.info(`Browser loaded. Page title: ${result.title}`);
       }
     } catch (err) {
       console.error('Browser failed:', formatErrorForLog(err));
       process.exit(1);
     }
   } else {
-    log('Fetching VFS login page: ' + VFS_LOGIN_URL);
+    logger.info('Fetching VFS login page: ' + VFS_LOGIN_URL);
     try {
       const fetchRes = await fetch(VFS_LOGIN_URL, {
         headers: {
@@ -265,7 +266,7 @@ export async function testVfsCaptchaCommand(
     });
     turnstileFormData['cf-turnstile-response'] = captchaInfo.solution;
 
-    log('Submitting Turnstile token to pass Cloudflare...');
+    logger.info('Submitting Turnstile token to pass Cloudflare...');
     try {
       const passRes = await fetch(formUrl, {
         method: 'POST',
@@ -333,7 +334,7 @@ export async function testVfsCaptchaCommand(
       formData[captchaInputName] = captchaInfo.solution!;
     }
 
-    log('Submitting login (with solved captcha)...');
+    logger.info('Submitting login (with solved captcha)...');
     const postRes = await fetch(formUrl, {
       method: (formMethod === 'get' ? 'GET' : 'POST') as 'GET' | 'POST',
       redirect: 'manual' as const,

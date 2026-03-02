@@ -6,7 +6,8 @@ import {
   formatBookingFailure,
   formatMonitorStarted,
 } from './telegram';
-import { log, sleep, formatErrorForLog } from './utils';
+import { logger } from './logger';
+import { sleep, formatErrorForLog } from './utils';
 import { checkUserWithCache as checkUserWithCacheUseCase } from '../application/checkUserWithCache';
 import { attemptBooking as attemptBookingUseCase } from '../application/attemptBooking';
 import { startMonitor as startMonitorUseCase } from '../application/startMonitor';
@@ -64,13 +65,13 @@ export class UserBotManager {
     this.bots.clear();
     this.sessions.clear();
 
-    log(`Initializing ${users.length} users...`);
+    logger.info(`Initializing ${users.length} users...`);
 
     let adapterModule: unknown = null;
     try {
       adapterModule = await import('../adapters/index');
     } catch (err) {
-      log(`Adapters not loaded (expected when running from src): ${formatErrorForLog(err)}`);
+      logger.warn(`Adapters not loaded (expected when running from src): ${formatErrorForLog(err)}`);
     }
 
     for (const user of users) {
@@ -112,13 +113,13 @@ export class UserBotManager {
         this.bots.set(user.email, bot);
         this.sessions.set(user.email, sessionHeaders);
 
-        log(`Initialized bot for user ${user.email}`);
+        logger.info(`Initialized bot for user ${user.email}`);
       } catch (error) {
-        log(`Failed to initialize bot for user ${user.email}: ${formatErrorForLog(error)}`);
+        logger.error(`Failed to initialize bot for user ${user.email}: ${formatErrorForLog(error)}`);
       }
     }
 
-    log(`Initialized ${this.bots.size} bots`);
+    logger.info(`Initialized ${this.bots.size} bots`);
   }
 
   async checkUserWithCache(user: User): Promise<string | null> {
@@ -132,7 +133,7 @@ export class UserBotManager {
       refreshAllDates: (client, headers, scheduleId, facilityId, ttl, p, opts) =>
         dc.refreshAllDates(client, headers as Record<string, unknown>, scheduleId, facilityId, ttl, p, opts),
       isDateAvailable: (date, p) => dc.isDateAvailable(date, p),
-      log,
+      log: (msg) => logger.info(msg),
     });
   }
 
@@ -155,7 +156,7 @@ export class UserBotManager {
       sendNotification: (msg) => notif.send(msg, chatId),
       formatBookingSuccessWithDetails: (u, o, n, t) => formatBookingSuccessWithDetails(u as import('./telegram').UserLike, o, n, t ?? null),
       formatBookingFailure: (u, d, r) => formatBookingFailure(u as import('./telegram').UserLike, d, r),
-      log,
+      log: (msg) => logger.info(msg),
     });
   }
 
@@ -194,7 +195,7 @@ export class UserBotManager {
         !this.lastSheetsRefresh ||
         (now.getTime() - this.lastSheetsRefresh.getTime()) / 1000 > (this.config.sheetsRefreshInterval ?? 300)
       ) {
-        log('Refreshing users and settings from Google Sheets...');
+        logger.info('Refreshing users and settings from Google Sheets...');
         try {
           const [sheetSettings, freshUsers] = await Promise.all([
             repo.getSettingsOverrides(),
@@ -203,9 +204,9 @@ export class UserBotManager {
           Object.assign(this.config, sheetSettings);
           await this.initializeUsers(freshUsers);
           this.lastSheetsRefresh = now;
-          log(`Refreshed users: ${freshUsers.length} active users`);
+          logger.info(`Refreshed users: ${freshUsers.length} active users`);
         } catch (error) {
-          log(`Failed to refresh users: ${formatErrorForLog(error)}`);
+          logger.error(`Failed to refresh users: ${formatErrorForLog(error)}`);
         }
       }
     }
@@ -213,11 +214,11 @@ export class UserBotManager {
     const user = getNextUser(this.users, this.config.rotationCooldown ?? 30);
 
     if (!user) {
-      log('No users to check, sleeping...');
+      logger.info('No users to check, sleeping...');
       return;
     }
 
-    log(`Checking user ${user.email}...`);
+    logger.info(`Checking user ${user.email}...`);
 
     const availableDate = await this.checkUserWithCache(user);
     incrementChecks();
@@ -245,14 +246,14 @@ export class UserBotManager {
   }
 
   async monitorWithRotation(initialCacheEntries?: Array<{ provider?: string; date: string }>): Promise<never> {
-    log('Starting monitoring loop with rotation...');
+    logger.info('Starting monitoring loop with rotation...');
 
     while (true) {
       try {
         await this.runOneCycle(initialCacheEntries);
         await sleep(this.config.refreshInterval ?? 3);
       } catch (error) {
-        log(`Error in monitoring loop: ${formatErrorForLog(error)}`);
+        logger.error(`Error in monitoring loop: ${formatErrorForLog(error)}`);
         await sleep(this.config.refreshInterval ?? 3);
       }
     }

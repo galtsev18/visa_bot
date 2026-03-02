@@ -1,14 +1,7 @@
-import { logger } from './logger';
-
 export function sleep(seconds: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, seconds * 1000);
   });
-}
-
-/** @deprecated Use logger.info() or logger.error() from './logger'. Kept for compatibility. */
-export function log(message: string): void {
-  logger.info(message);
 }
 
 export function isSocketHangupError(err: unknown): boolean {

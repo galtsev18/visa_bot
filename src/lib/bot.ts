@@ -1,5 +1,5 @@
 import { VisaHttpClient } from './client';
-import { log } from './utils';
+import { logger } from './logger';
 
 export interface BotClient {
   login(): Promise<Record<string, string> | Record<string, unknown>>;
@@ -67,19 +67,19 @@ export class Bot {
     );
 
     if (!dates || dates.length === 0) {
-      log('no dates available');
+      logger.info('no dates available');
       return null;
     }
 
     // Filter dates that are better than current booked date and after minimum date
     const goodDates = dates.filter((date) => {
       if (currentBookedDate && date >= currentBookedDate) {
-        log(`date ${date} is further than already booked (${currentBookedDate})`);
+        logger.info(`date ${date} is further than already booked (${currentBookedDate})`);
         return false;
       }
 
       if (minDate && date < minDate) {
-        log(`date ${date} is before minimum date (${minDate})`);
+        logger.info(`date ${date} is before minimum date (${minDate})`);
         return false;
       }
 
@@ -87,7 +87,7 @@ export class Bot {
     });
 
     if (goodDates.length === 0) {
-      log('no good dates found after filtering');
+      logger.info('no good dates found after filtering');
       return null;
     }
 
@@ -95,7 +95,7 @@ export class Bot {
     goodDates.sort();
     const earliestDate = goodDates[0];
 
-    log(
+    logger.info(
       `found ${goodDates.length} good dates: ${goodDates.join(', ')}, using earliest: ${earliestDate}`
     );
     return earliestDate;
@@ -116,12 +116,12 @@ export class Bot {
     );
 
     if (!time) {
-      log(`no available time slots for date ${date}`);
+      logger.info(`no available time slots for date ${date}`);
       return { success: false };
     }
 
     if (this.dryRun) {
-      log(`[DRY RUN] Would book appointment at ${date} ${time} (not actually booking)`);
+      logger.info(`[DRY RUN] Would book appointment at ${date} ${time} (not actually booking)`);
       return { success: true, time };
     }
 
@@ -133,7 +133,7 @@ export class Bot {
       time
     );
 
-    log(`booked time at ${date} ${time}`);
+    logger.info(`booked time at ${date} ${time}`);
     return { success: true, time };
   }
 }
