@@ -10,6 +10,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/domain/user.test.ts test/domain/userRotation.test.ts test/application/startMonitor.test.ts test/application/checkUserWithCache.test.ts test/application/attemptBooking.test.ts test/contracts/userRepository.contract.test.ts test/contracts/notificationSender.contract.test.ts test/contracts/dateCache.contract.test.ts test/integration/monitor-one-cycle.test.ts",
+    "coverage": "c8 --reporter=text --reporter=lcov --reports-dir=coverage node --import tsx --test test/domain/user.test.ts test/domain/userRotation.test.ts test/application/startMonitor.test.ts test/application/checkUserWithCache.test.ts test/application/attemptBooking.test.ts test/contracts/userRepository.contract.test.ts test/contracts/notificationSender.contract.test.ts test/contracts/dateCache.contract.test.ts test/integration/monitor-one-cycle.test.ts",
     "lint": "eslint src eslint.config.js --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.{ts,json,md}\"",
@@ -34,7 +35,8 @@
     "globals": "^15.12.0",
     "prettier": "^3.3.3",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.15.0"
+    "typescript-eslint": "^8.15.0",
+    "c8": "^10.1.2"
   },
   "optionalDependencies": {
     "puppeteer": "^24.15.0",

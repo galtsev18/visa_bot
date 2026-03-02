@@ -1,56 +1,20 @@
 # Планы на будущее
 
-Улучшения по результатам ревью архитектуры. Текущее состояние и техдолг — в [ARCHITECTURE.md](ARCHITECTURE.md) и [TECH_DEBT.md](TECH_DEBT.md). Требования при изменениях — в [REQUIREMENTS.md](REQUIREMENTS.md).
+Текущее состояние и техдолг — в [ARCHITECTURE.md](ARCHITECTURE.md) и [TECH_DEBT.md](TECH_DEBT.md). Требования при изменениях — в [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ---
 
-## План по расхождениям с целевой архитектурой
+## Выполнено (план по целевой архитектуре)
 
-План выстроен по приоритету и зависимостям: сначала низкорисковые и инкрементальные, затем рефакторинг структуры.
+- **Типизация:** typecheck без подавлений, порты и адаптеры типизированы ([CODE_QUALITY.md](CODE_QUALITY.md) § 3, [CONTRACTS.md](CONTRACTS.md)).
+- **Тесты:** контрактные тесты в `test/contracts/` (UserRepository, NotificationSender, DateCache); интеграционный один цикл в `test/integration/monitor-one-cycle.test.ts`.
+- **Слой domain:** `src/domain/` (dateUtils, User, userRotation), фабрика createUser в lib/user.ts, [ADR 0003](adr/0003-domain-layer.md), обновлён ARCHITECTURE.md.
+- **lib/sheets:** разбиение на зоны (блок Structure, секции 1–8), низкоуровневый API в `lib/sheetsClientCore.ts`. CI (lint, typecheck, test) проходит перед merge.
+- **Покрытие:** c8, `npm run coverage`, шаг в CI, см. [TESTING.md](TESTING.md) § 6.
+- **createMonitorContext:** опциональные `repo` и `notifications` для подмены адаптеров; интеграционный тест «один цикл с моком repo + notifications» в `test/integration/monitor-one-cycle.test.ts`.
 
-### 1. Усиление типизации (низкий риск, инкрементально)
+---
 
-- **Цель:** убрать оставшиеся `any`, усилить типы в портах и адаптерах.
-- **Действия:** пройти `src/` по типам (ports, application, adapters), заменить `any` и слабые типы на явные интерфейсы; при изменении портов обновлять [CONTRACTS.md](CONTRACTS.md).
-- **Критерий:** `npm run typecheck` без подавлений; в новых правках не добавлять `any` без обоснования (см. [CODE_QUALITY.md](CODE_QUALITY.md) § 3).
+## Возможные следующие шаги
 
-### 2. Расширение тестов (низкий риск)
-
-- **Цель:** больше уверенности в границах слоёв и контрактах.
-- **Действия:**
-  - Добавить интеграционный сценарий: один цикл monitor с моком только одного адаптера (например, только repo или только notifications), остальное реальное — по необходимости.
-  - Контрактные тесты: небольшие тесты, проверяющие, что моки портов (UserRepository, DateCache, NotificationSender) соответствуют ожидаемому использованию в use cases (сигнатуры и поведение при граничных данных).
-- **Критерий:** новые сценарии в `test/integration/` или `test/contracts/`; при изменении портов — обновить тесты и CONTRACTS.
-- **Выполнено:** контрактные тесты в `test/contracts/` (UserRepository, NotificationSender, DateCache); интеграционный один цикл — в `test/integration/monitor-one-cycle.test.ts` (все порты мокаются, т.к. в CI нет реальных Sheets/Telegram).
-
-### 3. Выделение слоя domain (средний риск, рефакторинг)
-
-- **Цель:** явный слой домена вместо доменной логики в `lib/`.
-- **Действия:**
-  - Создать каталог `src/domain/` (или `src/entities/`).
-  - Перенести туда сущности и доменные правила: `User`, `userRotation` (и зависимости без I/O). Порт `User` остаётся в `ports/` и может реэкспортировать или ссылаться на доменную сущность.
-  - Обновить импорты в application, composition, adapters; оставить в `lib/` только инфраструктурные вещи (config, logger, utils, client, dateCache, sheets, telegram, providers).
-  - Зафиксировать решение в ADR и обновить [ARCHITECTURE.md](ARCHITECTURE.md) (дерево исходников, схема слоёв).
-- **Критерий:** домен не импортирует из application, adapters, lib (кроме возможно общих типов/утилит без I/O); тесты и линт проходят.
-- **Выполнено:** каталог `src/domain/` (dateUtils, User, userRotation); порт User в ports/; фабрика createUser в lib/user.ts; ADR [0003-domain-layer](adr/0003-domain-layer.md), обновлён ARCHITECTURE.md.
-
-### 4. Разделение lib/sheets (средний риск, после или параллельно п.3)
-
-- **Цель:** уменьшить монолитность `lib/sheets.ts` (одна зона ответственности на модуль).
-- **Действия:**
-  - Выделить из `sheets.ts` низкоуровневый клиент (например, `get`, `batchGet`, `update`, `append` по диапазонам) в отдельный модуль или класс внутри `lib/` (например, `sheetsClient.ts` или внутренний API объекта, возвращаемого `createSheetsClient`).
-  - Оставить в текущем модуле (или втором модуле) только доменно-ориентированные функции (readUsers, updateUserLastChecked, readAvailableDatesCache, updateAvailableDate и т.д.), вызывающие низкоуровневый клиент. Либо явно разбить файл на секции с комментариями и чёткими границами.
-  - SheetsUserRepository по-прежнему использует только публичный API sheets; не плодить дублирование.
-  - Обновить [TECH_DEBT.md](TECH_DEBT.md) и при необходимости [ARCHITECTURE.md](ARCHITECTURE.md).
-- **Критерий:** один модуль/зона — одна ответственность; адаптер и тесты не ломаются.
-
-### Порядок и зависимости
-
-| Шаг | Зависимости | Когда делать |
-|-----|-------------|--------------|
-| 1. Типизация | — | В любое время, по файлам |
-| 2. Тесты | — | В любое время |
-| 3. Слой domain | — | После или параллельно 1–2 |
-| 4. Разделение sheets | Желательно после 3 (чтобы не тащить лишнее в domain) | После стабилизации domain |
-
-Пункты 1 и 2 можно вести параллельно. Пункт 4 можно отложить или ограничить только чётким разбиением на зоны внутри одного файла, если полное разнесение по файлам окажется избыточным.
+- Задать минимальный порог покрытия в CI (флаг `--check-coverage` в c8).

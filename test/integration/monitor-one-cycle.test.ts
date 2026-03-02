@@ -9,6 +9,7 @@ import { checkUserWithCache } from '../../src/application/checkUserWithCache';
 import { createDateCache } from '../../src/lib/dateCache';
 import { DateCacheAdapter } from '../../src/adapters/DateCacheAdapter';
 import { UserBotManager } from '../../src/lib/userBotManager';
+import { createMonitorContext } from '../../src/composition/createMonitorContext';
 import type { UserRepository } from '../../src/ports/UserRepository';
 import type { DateCache } from '../../src/ports/DateCache';
 import type { NotificationSender } from '../../src/ports/NotificationSender';
@@ -123,5 +124,77 @@ describe('integration: monitor one cycle', () => {
     assert.ok(sent.some((m) => m.includes('Monitor Started')), 'should send Monitor started');
     assert.ok(sent.some((m) => m.includes('Matching Slot Found')), 'should send slot found for cached date');
     assert.ok(sent.length >= 2, 'at least Monitor started and Slot found');
+  });
+
+  it('createMonitorContext with mocked repo + notifications runs one cycle (integration)', async () => {
+    const user = makeMockUser();
+    const sent: string[] = [];
+    const mockNotif: NotificationSender = {
+      send: async (msg: string) => {
+        sent.push(msg);
+        return true;
+      },
+    };
+    const cacheEntriesForInit = [
+      {
+        date: '2025-06-01',
+        available: true,
+        provider: 'ais',
+        cache_valid_until: new Date(Date.now() + 120000).toISOString(),
+      },
+    ];
+    const mockRepo: UserRepository = {
+      initialize: async () => {},
+      getActiveUsers: async () => [user],
+      getSettingsOverrides: async () => ({}),
+      getInitialData: async () => ({ users: [user], cacheEntries: cacheEntriesForInit }),
+      updateUserLastChecked: async () => {},
+      updateUserCurrentDate: async () => {},
+      updateUserLastBooked: async () => {},
+      updateUserPriority: async () => {},
+      logBookingAttempt: async () => {},
+      updateAvailableDate: async () => {},
+    };
+
+    const envBackup: Record<string, string | undefined> = {
+      GOOGLE_SHEETS_ID: process.env.GOOGLE_SHEETS_ID,
+      GOOGLE_CREDENTIALS_PATH: process.env.GOOGLE_CREDENTIALS_PATH,
+      TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
+      TELEGRAM_MANAGER_CHAT_ID: process.env.TELEGRAM_MANAGER_CHAT_ID,
+    };
+    process.env.GOOGLE_SHEETS_ID = process.env.GOOGLE_SHEETS_ID || 'test-sheet-id';
+    process.env.GOOGLE_CREDENTIALS_PATH = process.env.GOOGLE_CREDENTIALS_PATH || 'credentials.json';
+    process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'test-token';
+    process.env.TELEGRAM_MANAGER_CHAT_ID = process.env.TELEGRAM_MANAGER_CHAT_ID || 'test-chat';
+
+    try {
+      const ctx = await createMonitorContext({
+        repo: mockRepo,
+        notifications: mockNotif,
+        refreshInterval: 3,
+      });
+
+      const manager = new UserBotManager(ctx.config, {
+        repo: ctx.repo,
+        dateCache: ctx.dateCache,
+        notifications: ctx.notifications,
+      });
+      await manager.initializeUsers(ctx.users);
+      manager.bots.set(user.email, { client: {} } as never);
+      manager.sessions.set(user.email, {});
+
+      await manager.runOneCycle([], { skipSheetsRefresh: true });
+
+      assert.strictEqual(ctx.repo, mockRepo, 'context should use provided repo');
+      assert.strictEqual(ctx.notifications, mockNotif, 'context should use provided notifications');
+      assert.ok(sent.some((m) => m.includes('Monitor Started')), 'should send Monitor started');
+      assert.ok(sent.length >= 1, 'at least one notification');
+    } finally {
+      Object.keys(envBackup).forEach((k) => {
+        const v = envBackup[k];
+        if (v !== undefined) process.env[k] = v;
+        else delete process.env[k];
+      });
+    }
   });
 });

@@ -1,35 +1,43 @@
-import { google } from 'googleapis';
+/**
+ * Google Sheets integration: domain-oriented API (Users, Cache, Logs, Settings).
+ * Low-level API (get/batchGet/update/append + quota retry) lives in sheetsClientCore.ts.
+ *
+ * Structure (zones; see ROADMAP, TECH_DEBT):
+ * 1. Types & state — SheetsClientState, SheetsClient, CacheEntryFromSheet, BookingAttemptLog
+ * 2. Helpers — formatDateTimeForSheet, columnIndexToLetter
+ * 3. Initialization — ensureSheetsExist, ensureHeaders, createSheetsClient, initializeSheets
+ * 4. Domain: Settings — readSettingsFromSheetImpl, SETTINGS_* constants
+ * 5. Domain: Users — readUsersImpl, getInitialDataImpl, getColumnIndex, updateUser*Impl
+ * 6. Domain: Cache — readAvailableDatesCacheImpl, updateAvailableDateImpl
+ * 7. Domain: Logs — logBookingAttemptImpl
+ * 8. Legacy exports — readUsers, getInitialData, updateUserLastChecked, …
+ */
 import { logger } from './logger';
-import { sleep, formatErrorForLog } from './utils';
+import { formatErrorForLog } from './utils';
 import { createUser, User } from './user';
-
-type SheetsV4 = ReturnType<typeof google.sheets>;
+import {
+  createSheetsClientCore,
+  type SheetsClientCore,
+} from './sheetsClientCore';
 
 const SHEET_USERS = 'Users';
 const SHEET_CACHE = 'Available Dates Cache';
 const SHEET_LOGS = 'Booking Attempts Log';
 const SHEET_SETTINGS = 'Settings';
-const QUOTA_RETRY_WAIT_SEC = 65;
 
 export interface SheetsClientState {
-  sheets: SheetsV4 | null;
-  spreadsheetId: string | null;
+  core: SheetsClientCore;
   usersHeaderCache: string[] | null;
   emailToRowIndex: Map<string, number>;
   cacheDateToRowIndex: Map<string, number>;
-  quotaExceededNotified: boolean;
-  quotaNotifier: ((event: 'exceeded' | 'resolved') => void) | null;
 }
 
-function createState(): SheetsClientState {
+function createState(core: SheetsClientCore): SheetsClientState {
   return {
-    sheets: null,
-    spreadsheetId: null,
+    core,
     usersHeaderCache: null,
     emailToRowIndex: new Map(),
     cacheDateToRowIndex: new Map(),
-    quotaExceededNotified: false,
-    quotaNotifier: null,
   };
 }
 
@@ -72,41 +80,7 @@ export interface BookingAttemptLog {
   new_time?: string | null;
 }
 
-function isQuotaError(err: unknown): boolean {
-  const e = err as { message?: string; response?: { status?: number } } | undefined;
-  const msg = e?.message ?? '';
-  return (
-    e?.response?.status === 429 ||
-    msg.includes('Quota exceeded') ||
-    msg.includes('quota metric')
-  );
-}
-
-async function withQuotaRetry<T>(s: SheetsClientState, fn: () => Promise<T>): Promise<T> {
-  try {
-    const result = await fn();
-    if (s.quotaExceededNotified && s.quotaNotifier) {
-      s.quotaNotifier('resolved');
-      s.quotaExceededNotified = false;
-    }
-    return result;
-  } catch (error) {
-    if (!isQuotaError(error)) throw error;
-    if (!s.quotaExceededNotified && s.quotaNotifier) {
-      s.quotaNotifier('exceeded');
-      s.quotaExceededNotified = true;
-    }
-    logger.info(`Sheets API quota exceeded. Waiting ${QUOTA_RETRY_WAIT_SEC}s before retry...`);
-    await sleep(QUOTA_RETRY_WAIT_SEC);
-    const result = await fn();
-    if (s.quotaNotifier) {
-      s.quotaNotifier('resolved');
-      s.quotaExceededNotified = false;
-    }
-    return result;
-  }
-}
-
+// ------------ 2. Helpers ------------
 function formatDateTimeForSheet(
   dateStr: string | null | undefined,
   timeStr?: string | null
@@ -128,24 +102,14 @@ function columnIndexToLetter(index: number): string {
   return result;
 }
 
-async function ensureSheetsExist(s: SheetsClientState): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) throw new Error('Sheets not initialized');
-  const spreadsheet = await s.sheets.spreadsheets.get({ spreadsheetId: s.spreadsheetId });
-  const existingTitles = (spreadsheet.data.sheets ?? [])
-    .map((sh) => sh.properties?.title)
-    .filter(Boolean);
+// ------------ 3. Initialization ------------
+async function ensureSheetsExist(core: SheetsClientCore): Promise<void> {
+  const { sheetTitles } = await core.getSpreadsheetMetadata();
   const required = [SHEET_USERS, SHEET_CACHE, SHEET_LOGS, SHEET_SETTINGS];
-  const missing = required.filter((name) => !existingTitles.includes(name));
+  const missing = required.filter((name) => !sheetTitles.includes(name));
   if (missing.length === 0) return;
   logger.info(`Creating ${missing.length} sheet(s): ${missing.join(', ')}...`);
-  await s.sheets!.spreadsheets.batchUpdate({
-    spreadsheetId: s.spreadsheetId!,
-    requestBody: {
-      requests: missing.map((sheetName) => ({
-        addSheet: { properties: { title: sheetName } },
-      })),
-    },
-  });
+  await core.addSheets(missing);
   missing.forEach((name) => logger.info(`✅ Created sheet "${name}"`));
 }
 
@@ -183,25 +147,20 @@ const LOGS_HEADERS = [
 const SETTINGS_HEADERS = ['key', 'value'];
 
 async function ensureHeaders(s: SheetsClientState): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) return;
+  const { core } = s;
   try {
-    const batch = await s.sheets.spreadsheets.values.batchGet({
-      spreadsheetId: s.spreadsheetId,
-      ranges: [
-        `${SHEET_USERS}!1:1`,
-        `${SHEET_CACHE}!1:1`,
-        `${SHEET_LOGS}!1:1`,
-        `${SHEET_SETTINGS}!1:1`,
-      ],
-    });
+    const batch = await core.batchGet([
+      `${SHEET_USERS}!1:1`,
+      `${SHEET_CACHE}!1:1`,
+      `${SHEET_LOGS}!1:1`,
+      `${SHEET_SETTINGS}!1:1`,
+    ]);
+    const usersRow = batch[0]?.[0] as string[] | undefined;
+    const cacheRow = batch[1]?.[0] as string[] | undefined;
+    const logsRow = batch[2]?.[0] as string[] | undefined;
+    const settingsRow = batch[3]?.[0] as string[] | undefined;
 
-    const valueRanges = batch.data.valueRanges ?? [];
-    const usersRow = valueRanges[0]?.values?.[0] as string[] | undefined;
-    const cacheRow = valueRanges[1]?.values?.[0] as string[] | undefined;
-    const logsRow = valueRanges[2]?.values?.[0] as string[] | undefined;
-    const settingsRow = valueRanges[3]?.values?.[0] as string[] | undefined;
-
-    if (usersRow && usersRow.length > 0) s.usersHeaderCache = usersRow;
+    if (usersRow && usersRow.length > 0) s.usersHeaderCache = usersRow.map(String);
 
     const updates: { range: string; values: string[][] }[] = [];
     if (!usersRow || usersRow.length === 0) {
@@ -224,13 +183,7 @@ async function ensureHeaders(s: SheetsClientState): Promise<void> {
     }
 
     if (updates.length > 0) {
-      await s.sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: s.spreadsheetId,
-        requestBody: {
-          valueInputOption: 'RAW',
-          data: updates,
-        },
-      });
+      await core.batchUpdate(updates, 'RAW');
       updates.forEach((u) => logger.info(`Created headers for ${u.range.split('!')[0]}`));
     }
 
@@ -259,17 +212,12 @@ export async function createSheetsClient(
   credentialsPath: string,
   sheetId: string
 ): Promise<SheetsClient> {
-  const s = createState();
-  const auth = new google.auth.GoogleAuth({
-    keyFile: credentialsPath,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  s.sheets = google.sheets({ version: 'v4', auth });
-  s.spreadsheetId = sheetId;
+  const core = await createSheetsClientCore(credentialsPath, sheetId);
+  const s = createState(core);
   logger.info('Google Sheets initialized');
 
-  await withQuotaRetry(s, async () => {
-    await ensureSheetsExist(s);
+  await core.withQuotaRetry(async () => {
+    await ensureSheetsExist(core);
     await ensureHeaders(s);
     return true;
   }).catch((error) => {
@@ -279,7 +227,7 @@ export async function createSheetsClient(
 
   return {
     setQuotaNotifier(fn) {
-      s.quotaNotifier = fn;
+      core.setQuotaNotifier(fn);
     },
     readSettingsFromSheet: () => readSettingsFromSheetImpl(s),
     readUsers: () => readUsersImpl(s),
@@ -312,6 +260,7 @@ export function setSheetsQuotaNotifier(fn: (event: 'exceeded' | 'resolved') => v
   if (defaultClient) defaultClient.setQuotaNotifier(fn);
 }
 
+// ------------ 5. Domain: Settings ------------
 const SETTINGS_KEY_MAP: Record<
   string,
   { configKey: string; number: boolean }
@@ -342,25 +291,16 @@ const SETTINGS_DEFAULT_VALUES: Record<string, string> = {
 };
 
 async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<string, unknown>> {
-  if (!s.sheets || !s.spreadsheetId) return {};
-  return withQuotaRetry(s, async () => {
-    const response = await s.sheets!.spreadsheets.values.get({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_SETTINGS}!A1:B500`,
-    });
-    const rows = (response.data.values ?? []) as (string | number)[][];
+  const { core } = s;
+  try {
+    const rows = await core.get(`${SHEET_SETTINGS}!A1:B500`);
     if (rows.length < 1) return {};
 
     const headerKey = String(rows[0][0] ?? '').toLowerCase().trim();
     const headerVal = String(rows[0][1] ?? '').toLowerCase().trim();
     if (headerKey !== 'key' || headerVal !== 'value') {
       logger.info('Settings sheet: invalid structure (expected key, value). Fixing headers.');
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_SETTINGS}!1:1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [SETTINGS_HEADERS] },
-      });
+      await core.update(`${SHEET_SETTINGS}!1:1`, [SETTINGS_HEADERS], 'RAW');
       return {};
     }
 
@@ -377,12 +317,9 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
     const missingKeys = allKeys.filter((k) => !existingKeys.has(k));
     if (missingKeys.length > 0) {
       const appendRows = missingKeys.map((k) => [k, SETTINGS_DEFAULT_VALUES[k] ?? '']);
-      await s.sheets!.spreadsheets.values.append({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_SETTINGS}!A:B`,
+      await core.append(`${SHEET_SETTINGS}!A:B`, appendRows, {
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: appendRows },
       });
       logger.info(`Settings: added missing keys: ${missingKeys.join(', ')}`);
       for (const k of missingKeys) {
@@ -416,22 +353,18 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
       logger.info(`Settings from sheet: ${Object.keys(overrides).join(', ')}`);
     }
     return overrides;
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to read Settings sheet: ${formatErrorForLog(error)}`);
     return {};
-  });
+  }
 }
 
+// ------------ 5. Domain: Users ------------
 async function readUsersImpl(s: SheetsClientState): Promise<User[]> {
-  if (!s.sheets || !s.spreadsheetId) return [];
-  return withQuotaRetry(s, async () => {
+  const { core } = s;
+  try {
     s.emailToRowIndex.clear();
-    const response = await s.sheets!.spreadsheets.values.get({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_USERS}!A1:Z1000`,
-    });
-
-    const rows = response.data.values as (string | number)[][] | undefined;
+    const rows = await core.get(`${SHEET_USERS}!A1:Z1000`);
     if (!rows || rows.length < 2) return [];
 
     const headers = rows[0].map((h) => String(h).toLowerCase().replace(/\s+/g, '_'));
@@ -461,25 +394,24 @@ async function readUsersImpl(s: SheetsClientState): Promise<User[]> {
 
     logger.info(`Read ${users.length} active users from Google Sheets`);
     return users;
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to read users from Google Sheets: ${formatErrorForLog(error)}`);
     throw error;
-  });
+  }
 }
 
 async function getInitialDataImpl(s: SheetsClientState): Promise<{
   users: User[];
   cacheEntries: CacheEntryFromSheet[];
 }> {
-  if (!s.sheets || !s.spreadsheetId) return { users: [], cacheEntries: [] };
-  return withQuotaRetry(s, async () => {
-    const batch = await s.sheets!.spreadsheets.values.batchGet({
-      spreadsheetId: s.spreadsheetId!,
-      ranges: [`${SHEET_USERS}!A1:Z1000`, `${SHEET_CACHE}!A1:F1000`],
-    });
-    const valueRanges = batch.data.valueRanges ?? [];
-    const usersRows = (valueRanges[0]?.values ?? []) as (string | number)[][];
-    const cacheRows = (valueRanges[1]?.values ?? []) as (string | number)[][];
+  const { core } = s;
+  try {
+    const batch = await core.batchGet([
+      `${SHEET_USERS}!A1:Z1000`,
+      `${SHEET_CACHE}!A1:F1000`,
+    ]);
+    const usersRows = batch[0] ?? [];
+    const cacheRows = batch[1] ?? [];
 
     s.emailToRowIndex.clear();
     s.cacheDateToRowIndex.clear();
@@ -538,21 +470,17 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
 
     logger.info(`Initial data: ${users.length} users, ${cacheEntries.length} cache entries (1 batch read)`);
     return { users, cacheEntries };
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to get initial data: ${formatErrorForLog(error)}`);
     throw error;
-  });
+  }
 }
 
+// ------------ 6. Domain: Cache ------------
 async function readAvailableDatesCacheImpl(s: SheetsClientState): Promise<CacheEntryFromSheet[]> {
-  if (!s.sheets || !s.spreadsheetId) return [];
-  return withQuotaRetry(s, async () => {
-    const response = await s.sheets!.spreadsheets.values.get({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_CACHE}!A1:F1000`,
-    });
-
-    const rows = response.data.values as (string | number)[][] | undefined;
+  const { core } = s;
+  try {
+    const rows = await core.get(`${SHEET_CACHE}!A1:F1000`);
     if (!rows || rows.length < 2) return [];
 
     const headers = rows[0].map((h) => String(h).toLowerCase().replace(/\s+/g, '_'));
@@ -588,10 +516,10 @@ async function readAvailableDatesCacheImpl(s: SheetsClientState): Promise<CacheE
 
     logger.info(`Read ${cache.length} cache entries from Google Sheets`);
     return cache;
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to read cache from Google Sheets: ${formatErrorForLog(error)}`);
     return [];
-  });
+  }
 }
 
 async function updateAvailableDateImpl(
@@ -601,17 +529,13 @@ async function updateAvailableDateImpl(
   times: string[] = [],
   facilityId = 134
 ): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) return;
-  return withQuotaRetry(s, async () => {
+  const { core } = s;
+  try {
     const dateOnly = date.toString().slice(0, 10);
     let rowIndex = s.cacheDateToRowIndex.get(dateOnly);
 
     if (rowIndex == null) {
-      const response = await s.sheets!.spreadsheets.values.get({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_CACHE}!A:A`,
-      });
-      const rows = (response.data.values ?? []) as (string | number)[][];
+      const rows = await core.get(`${SHEET_CACHE}!A:A`);
       for (let i = 1; i < rows.length; i++) {
         const cell = (rows[i][0] ?? '').toString();
         if (cell.slice(0, 10) === dateOnly || cell === date) {
@@ -635,20 +559,10 @@ async function updateAvailableDateImpl(
     ];
 
     if (rowIndex != null && rowIndex > 0) {
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_CACHE}!A${rowIndex}:F${rowIndex}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [values] },
-      });
+      await core.update(`${SHEET_CACHE}!A${rowIndex}:F${rowIndex}`, [values], 'RAW');
     } else {
-      const appendRes = await s.sheets!.spreadsheets.values.append({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_CACHE}!A:F`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [values] },
-      });
-      const updatedRange = appendRes?.data?.updates?.updatedRange;
+      const appendRes = await core.append(`${SHEET_CACHE}!A:F`, [values], { valueInputOption: 'RAW' });
+      const updatedRange = appendRes?.updatedRange;
       if (updatedRange) {
         const match = updatedRange.match(/A(\d+):/);
         if (match) s.cacheDateToRowIndex.set(dateOnly, parseInt(match[1], 10));
@@ -656,14 +570,15 @@ async function updateAvailableDateImpl(
     }
 
     logger.info(`Updated cache for date ${date}: available=${available}`);
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to update cache for date ${date}: ${formatErrorForLog(error)}`);
-  });
+  }
 }
 
+// ------------ 7. Domain: Logs ------------
 async function logBookingAttemptImpl(s: SheetsClientState, attempt: BookingAttemptLog): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) return;
-  return withQuotaRetry(s, async () => {
+  const { core } = s;
+  try {
     const values = [
       new Date().toISOString(),
       attempt.user_email ?? '',
@@ -674,30 +589,22 @@ async function logBookingAttemptImpl(s: SheetsClientState, attempt: BookingAttem
       formatDateTimeForSheet(attempt.new_date, attempt.new_time),
     ];
 
-    await s.sheets!.spreadsheets.values.append({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_LOGS}!A:G`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [values] },
-    });
+    await core.append(`${SHEET_LOGS}!A:G`, [values], { valueInputOption: 'RAW' });
 
     logger.info(`Logged booking attempt: ${attempt.user_email} - ${attempt.result}`);
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to log booking attempt: ${formatErrorForLog(error)}`);
-  });
+  }
 }
 
 async function getColumnIndex(s: SheetsClientState, headerName: string): Promise<number> {
-  if (!s.sheets || !s.spreadsheetId) return -1;
+  const { core } = s;
   try {
     let headers = s.usersHeaderCache;
     if (!headers || headers.length === 0) {
-      const response = await s.sheets.spreadsheets.values.get({
-        spreadsheetId: s.spreadsheetId,
-        range: `${SHEET_USERS}!1:1`,
-      });
-      headers = (response.data.values?.[0] ?? []).map(String);
-      s.usersHeaderCache = headers as string[];
+      const rows = await core.get(`${SHEET_USERS}!1:1`);
+      headers = (rows[0] ?? []).map(String);
+      s.usersHeaderCache = headers;
     }
     const normalizedHeader = headerName.toLowerCase().replace(/\s+/g, '_');
     for (let i = 0; i < headers.length; i++) {
@@ -717,30 +624,21 @@ async function updateUserLastCheckedImpl(
   timestamp: Date,
   rowIndex?: number | null
 ): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) return;
-  return withQuotaRetry(s, async () => {
+  const { core } = s;
+  try {
     const r = rowIndex ?? s.emailToRowIndex.get(email);
     if (r != null && r > 0) {
       const lastCheckedCol = await getColumnIndex(s, 'last_checked');
       if (lastCheckedCol < 0) return;
       const colLetter = columnIndexToLetter(lastCheckedCol);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${r}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[timestamp.toISOString()]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[timestamp.toISOString()]], 'RAW');
       return;
     }
     const emailCol = await getColumnIndex(s, 'email');
     const lastCheckedCol = await getColumnIndex(s, 'last_checked');
     if (emailCol < 0 || lastCheckedCol < 0) return;
     const emailColLetter = columnIndexToLetter(emailCol);
-    const response = await s.sheets!.spreadsheets.values.get({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_USERS}!${emailColLetter}:${emailColLetter}`,
-    });
-    const rows = (response.data.values ?? []) as string[][];
+    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
     let found = -1;
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] === email) {
@@ -751,16 +649,11 @@ async function updateUserLastCheckedImpl(
     }
     if (found > 0) {
       const colLetter = columnIndexToLetter(lastCheckedCol);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${found}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[timestamp.toISOString()]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[timestamp.toISOString()]], 'RAW');
     }
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to update last_checked for ${email}: ${formatErrorForLog(error)}`);
-  });
+  }
 }
 
 async function updateUserCurrentDateImpl(
@@ -770,31 +663,22 @@ async function updateUserCurrentDateImpl(
   timeSlot: string | null = null,
   rowIndex?: number | null
 ): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) return;
-  return withQuotaRetry(s, async () => {
+  const { core } = s;
+  try {
     const r = rowIndex ?? s.emailToRowIndex.get(email);
     if (r != null && r > 0) {
       const currentDateCol = await getColumnIndex(s, 'current_date');
       if (currentDateCol < 0) return;
       const colLetter = columnIndexToLetter(currentDateCol);
       const value = formatDateTimeForSheet(newDate, timeSlot);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${r}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[value]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[value]], 'RAW');
       return;
     }
     const emailCol = await getColumnIndex(s, 'email');
     const currentDateCol = await getColumnIndex(s, 'current_date');
     if (emailCol < 0 || currentDateCol < 0) return;
     const emailColLetter = columnIndexToLetter(emailCol);
-    const response = await s.sheets!.spreadsheets.values.get({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_USERS}!${emailColLetter}:${emailColLetter}`,
-    });
-    const rows = (response.data.values ?? []) as string[][];
+    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
     let found = -1;
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] === email) {
@@ -806,16 +690,11 @@ async function updateUserCurrentDateImpl(
     if (found > 0) {
       const colLetter = columnIndexToLetter(currentDateCol);
       const value = formatDateTimeForSheet(newDate, timeSlot);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${found}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[value]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[value]], 'RAW');
     }
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to update current_date for ${email}: ${formatErrorForLog(error)}`);
-  });
+  }
 }
 
 async function updateUserLastBookedImpl(
@@ -825,31 +704,22 @@ async function updateUserLastBookedImpl(
   timeSlot: string | null = null,
   rowIndex?: number | null
 ): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) return;
-  return withQuotaRetry(s, async () => {
+  const { core } = s;
+  try {
     const r = rowIndex ?? s.emailToRowIndex.get(email);
     if (r != null && r > 0) {
       const lastBookedCol = await getColumnIndex(s, 'last_booked');
       if (lastBookedCol < 0) return;
       const colLetter = columnIndexToLetter(lastBookedCol);
       const value = formatDateTimeForSheet(date, timeSlot);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${r}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[value]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[value]], 'RAW');
       return;
     }
     const emailCol = await getColumnIndex(s, 'email');
     const lastBookedCol = await getColumnIndex(s, 'last_booked');
     if (emailCol < 0 || lastBookedCol < 0) return;
     const emailColLetter = columnIndexToLetter(emailCol);
-    const response = await s.sheets!.spreadsheets.values.get({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_USERS}!${emailColLetter}:${emailColLetter}`,
-    });
-    const rows = (response.data.values ?? []) as string[][];
+    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
     let found = -1;
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] === email) {
@@ -861,16 +731,11 @@ async function updateUserLastBookedImpl(
     if (found > 0) {
       const colLetter = columnIndexToLetter(lastBookedCol);
       const value = formatDateTimeForSheet(date, timeSlot);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${found}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[value]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[value]], 'RAW');
     }
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to update last_booked for ${email}: ${formatErrorForLog(error)}`);
-  });
+  }
 }
 
 async function updateUserPriorityImpl(
@@ -879,30 +744,21 @@ async function updateUserPriorityImpl(
   priority: number,
   rowIndex?: number | null
 ): Promise<void> {
-  if (!s.sheets || !s.spreadsheetId) return;
-  return withQuotaRetry(s, async () => {
+  const { core } = s;
+  try {
     const r = rowIndex ?? s.emailToRowIndex.get(email);
     if (r != null && r > 0) {
       const priorityCol = await getColumnIndex(s, 'priority');
       if (priorityCol < 0) return;
       const colLetter = columnIndexToLetter(priorityCol);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${r}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[priority]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[priority]], 'RAW');
       return;
     }
     const emailCol = await getColumnIndex(s, 'email');
     const priorityCol = await getColumnIndex(s, 'priority');
     if (emailCol < 0 || priorityCol < 0) return;
     const emailColLetter = columnIndexToLetter(emailCol);
-    const response = await s.sheets!.spreadsheets.values.get({
-      spreadsheetId: s.spreadsheetId!,
-      range: `${SHEET_USERS}!${emailColLetter}:${emailColLetter}`,
-    });
-    const rows = (response.data.values ?? []) as string[][];
+    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
     let found = -1;
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] === email) {
@@ -913,19 +769,14 @@ async function updateUserPriorityImpl(
     }
     if (found > 0) {
       const colLetter = columnIndexToLetter(priorityCol);
-      await s.sheets!.spreadsheets.values.update({
-        spreadsheetId: s.spreadsheetId!,
-        range: `${SHEET_USERS}!${colLetter}${found}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[priority]] },
-      });
+      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[priority]], 'RAW');
     }
-  }).catch((error) => {
+  } catch (error) {
     logger.error(`Failed to update priority for ${email}: ${formatErrorForLog(error)}`);
-  });
+  }
 }
 
-// --- Exports: delegate to default client (set by initializeSheets); keep same names for callers ---
+// ------------ 8. Legacy exports (delegate to default client from initializeSheets) ------------
 
 export async function readSettingsFromSheet(): Promise<Record<string, unknown>> {
   if (!defaultClient) return {};

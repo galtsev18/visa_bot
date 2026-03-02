@@ -42,6 +42,10 @@ export interface MonitorContext {
 export interface CreateMonitorContextOptions {
   refreshInterval?: number;
   sheetsRefresh?: number;
+  /** When provided, used instead of creating SheetsUserRepository (e.g. for tests). */
+  repo?: UserRepository;
+  /** When provided, used instead of creating TelegramNotificationAdapter (e.g. for tests). */
+  notifications?: NotificationSender;
 }
 
 /**
@@ -52,7 +56,7 @@ export async function createMonitorContext(
   options: CreateMonitorContextOptions = {}
 ): Promise<MonitorContext> {
   const envProvider = new EnvConfigProvider();
-  const repo = new SheetsUserRepository();
+  const repo = options.repo ?? new SheetsUserRepository();
   const configProvider = new MergedConfigProvider(envProvider, repo);
   const config = await configProvider.getConfig();
 
@@ -62,10 +66,12 @@ export async function createMonitorContext(
   validateMultiUserConfig(config as Parameters<typeof validateMultiUserConfig>[0]);
 
   const chatId = String(config.telegramManagerChatId ?? '').trim();
-  const notifications = new TelegramNotificationAdapter({
-    token: String(config.telegramBotToken ?? '').trim(),
-    defaultChatId: chatId,
-  });
+  const notifications =
+    options.notifications ??
+    new TelegramNotificationAdapter({
+      token: String(config.telegramBotToken ?? '').trim(),
+      defaultChatId: chatId,
+    });
 
   const { users, cacheEntries } = await repo.getInitialData();
 
