@@ -62,7 +62,7 @@
 | `updateAvailableDate` | `updateAvailableDate(date, available, times?, facilityId?): Promise<void>` | Сохранить запись кэша дат (используется адаптером DateCache при персистентности). |
 | `setQuotaNotifier` (опц.) | `setQuotaNotifier?(fn: (event: 'exceeded' \| 'resolved') => void): void` | Подписка на квоты (напр. Sheets 429). Реализация — SheetsUserRepository; для других адаптеров не обязателен. |
 
-**Реализация:** `SheetsUserRepository` (при `initialize()` вызывает `initializeSheets()` из lib/sheets, что создаёт клиент по умолчанию для всех экспортов модуля). Адаптер дополнительно предоставляет `setQuotaNotifier(fn)` для подписки на квоты Sheets; команда monitor использует его для уведомлений в Telegram. Для тестов или нескольких таблиц можно использовать фабрику `createSheetsClient(credentialsPath, sheetId)` из `lib/sheets.ts` — она возвращает объект `SheetsClient` с тем же API и изолированным состоянием.
+**Реализация:** `SheetsUserRepository` (при `initialize()` вызывает `initializeSheets()` из lib/sheets, что создаёт клиент по умолчанию для всех экспортов модуля). Внутри lib/sheets доменные операции (Users, Cache, Logs, Settings) выполняются через низкоуровневый API из `lib/sheetsClientCore.ts` (get, batchGet, update, append, quota retry). Адаптер дополнительно предоставляет `setQuotaNotifier(fn)` для подписки на квоты Sheets; команда monitor использует его для уведомлений в Telegram. Для тестов или нескольких таблиц можно использовать фабрику `createSheetsClient(credentialsPath, sheetId)` из `lib/sheets.ts` — она возвращает объект `SheetsClient` с тем же API и изолированным состоянием.
 
 ---
 

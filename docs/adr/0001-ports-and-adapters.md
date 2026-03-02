@@ -22,7 +22,7 @@
 
 ### Отрицательные / риски
 
-- Часть lib остаётся с глобальным состоянием (см. TECH_DEBT, ROADMAP); уведомления о квотах Sheets по-прежнему используют глобальные initializeTelegram/setSheetsQuotaNotifier.
+- Часть lib остаётся с модульным состоянием (default client в lib/sheets при вызове initializeSheets); уведомления о квотах Sheets подписываются через `repo.setQuotaNotifier()` в команде monitor, реализация — в SheetsUserRepository → lib/sheets → lib/sheetsClientCore. Для тестов composition root принимает опциональные `opts.repo` и `opts.notifications`.
 
 ### Нейтральные
 

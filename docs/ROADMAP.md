@@ -12,9 +12,10 @@
 - **lib/sheets:** разбиение на зоны (блок Structure, секции 1–8), низкоуровневый API в `lib/sheetsClientCore.ts`. CI (lint, typecheck, test) проходит перед merge.
 - **Покрытие:** c8, `npm run coverage`, шаг в CI, см. [TESTING.md](TESTING.md) § 6.
 - **createMonitorContext:** опциональные `repo` и `notifications` для подмены адаптеров; интеграционный тест «один цикл с моком repo + notifications» в `test/integration/monitor-one-cycle.test.ts`.
+- **Порог покрытия в CI:** `npm run coverage` с `--check-coverage --statements 40 --lines 40`; падение ниже порога блокирует прохождение CI.
 
 ---
 
 ## Возможные следующие шаги
 
-- Задать минимальный порог покрытия в CI (флаг `--check-coverage` в c8).
+- При необходимости повысить порог покрытия (сейчас 40% по statements и lines).

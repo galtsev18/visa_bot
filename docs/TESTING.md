@@ -60,8 +60,8 @@
 
 ## 6. Покрытие
 
-- **Инструмент:** c8. Команда: `npm run coverage` (результат в консоли и в `coverage/` в формате lcov). В CI покрытие собирается на каждом push/PR (см. `.github/workflows/ci.yml`).
-- Минимальный порог покрытия не задан; при добавлении или изменении доменной логики и use cases ожидается добавление или обновление тестов. При необходимости порог можно задать в `package.json` (секция `c8`) или через флаг `--check-coverage`.
+- **Инструмент:** c8. Команда: `npm run coverage` (результат в консоли и в `coverage/` в формате lcov). В CI покрытие собирается и проверяется на каждом push/PR (см. `.github/workflows/ci.yml`).
+- **Порог в CI:** минимальные 40% по statements и lines (`--check-coverage --statements 40 --lines 40`). При добавлении или изменении доменной логики и use cases ожидается добавление или обновление тестов; порог можно повысить в скрипте `coverage` в `package.json`.
 
 ---
 
@@ -84,4 +84,4 @@
 
 3. **Проверки:** вызов `createMonitorContext` с моком репозитория (или фабрикой, возвращающей мок после «инициализации»); создание `UserBotManager(config, { repo, dateCache, notifications })`; один проход цикла (например, вызов `checkUserWithCache` и при наличии даты — `attemptBooking`); проверка вызовов моков (обновление lastChecked, отправка уведомления и т.д.).
 
-4. **Реализация:** тест может вызывать `createMonitorContext` с кастомным ConfigProvider и UserRepository (например, класс-заглушка, реализующий порт и возвращающий тестовые данные), либо собирать контекст вручную (config + моки repo/dateCache/notifications) и передавать в UserBotManager, затем выполнять один шаг цикла. Рекомендуется отдельный файл `test/integration/monitor-one-cycle.test.ts`; тесты запускаются через `npm test`.
+4. **Реализация:** тест может вызывать `createMonitorContext({ repo: mockRepo, notifications: mockNotif })` (опциональные зависимости, см. [ARCHITECTURE.md](ARCHITECTURE.md) § 1.1), либо собирать контекст вручную (config + моки repo/dateCache/notifications) и передавать в UserBotManager, затем выполнять один шаг цикла. Рекомендуется отдельный файл `test/integration/monitor-one-cycle.test.ts`; тесты запускаются через `npm test`.

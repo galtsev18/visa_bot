@@ -53,6 +53,6 @@
 
 ## 7. Ревью и CI
 
-- Перед merge: код должен проходить `npm run lint`, `npm run typecheck`, `npm test`.
+- Перед merge: код должен проходить `npm run lint`, `npm run typecheck`, `npm test`, `npm run coverage` (порог покрытия задан в CI; см. [TESTING.md](TESTING.md) § 6).
 - При изменении портов или контрактов: обновить CONTRACTS.md и при необходимости ADR; тесты с моками портов — обновить.
 - Критичные архитектурные решения фиксировать в [ADR](adr/README.md).

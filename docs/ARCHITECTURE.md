@@ -18,7 +18,7 @@
 - **Логирование:** pino (`LOG_LEVEL`)
 - **Опционально:** Puppeteer + stealth (VFS/Cloudflare)
 
-**Состояние в lib:** в `lib/sheets.ts` — фабрика `createSheetsClient(credentialsPath, sheetId)` возвращает экземпляр с собственным состоянием (для тестов или нескольких таблиц); `initializeSheets()` создаёт клиент по умолчанию, все текущие экспорты делегируют ему. В `lib/telegram.ts` — фабрика `createTelegramSender()`. В `lib/dateCache.ts` — фасад `createDateCache()`. Команда monitor подписывается на квоты через `repo.setQuotaNotifier()`.
+**Состояние в lib:** в `lib/sheetsClientCore.ts` — низкоуровневый API Google Sheets (get, batchGet, update, batchUpdate, append, getSpreadsheetMetadata, addSheets) и quota retry с состоянием; в `lib/sheets.ts` — доменный API (Users, Cache, Logs, Settings), использует core; фабрика `createSheetsClient(credentialsPath, sheetId)` возвращает экземпляр с собственным состоянием; `initializeSheets()` создаёт клиент по умолчанию для legacy-экспортов. В `lib/telegram.ts` — фабрика `createTelegramSender()`. В `lib/dateCache.ts` — фасад `createDateCache()`. Команда monitor подписывается на квоты через `repo.setQuotaNotifier()`. В `createMonitorContext(opts)` опционально передаются `opts.repo` и `opts.notifications` для подмены адаптеров (интеграционные тесты).
 
 ### 1.2 Дерево исходников
 
@@ -65,7 +65,8 @@ src/
     ├── userBotManager.ts       # Оркестратор monitor
     ├── bot.ts, client.ts             # Один бот и AIS HTTP
     ├── dateCache.ts, dateParser.ts
-    ├── sheets.ts, telegram.ts
+    ├── sheets.ts, sheetsClientCore.ts
+    ├── telegram.ts
     ├── fallbackAdapters.ts            # Не используется командой monitor (оставлен для возможных утилит)
     ├── metrics.ts                    # Метрики для health
     ├── captcha.ts, browserCloudflare.ts

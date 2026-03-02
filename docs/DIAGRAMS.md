@@ -4,7 +4,7 @@ C4, DFD и sequence-диаграммы в формате Mermaid. Рендер: 
 
 Связано: [ARCHITECTURE.md](ARCHITECTURE.md) · [CONTRACTS.md](CONTRACTS.md) · [ADR](adr/README.md).
 
-**Актуальность:** диаграммы соответствуют текущей архитектуре: Node 18+, встроенный fetch, состояние sheets в одном объекте, уведомления о квотах через `repo.setQuotaNotifier()`, Telegram через `createTelegramSender()`.
+**Актуальность:** диаграммы соответствуют текущей архитектуре: Node 18+, встроенный fetch; доступ к Google Sheets — через `lib/sheets.ts` (доменный API: Users, Cache, Logs, Settings) и `lib/sheetsClientCore.ts` (низкоуровневый get/batchGet/update/append + quota retry); уведомления о квотах через `repo.setQuotaNotifier()`; Telegram через `TelegramNotificationAdapter`; composition root `createMonitorContext` с опциональными `opts.repo` и `opts.notifications` для тестов. Запуск: `npm start -- monitor` / `npm start -- bot`.
 
 ---
 
@@ -75,7 +75,7 @@ C4Component
     title Component — Monitor (порты и адаптеры)
 
     Container_Boundary(monitor_flow, "Monitor Flow") {
-        Component(cli_cmd, "monitor command", "Commander", "Точка входа composition root или fallback")
+        Component(cli_cmd, "monitor command", "Commander", "Точка входа → createMonitorContext → UserBotManager")
         Component(manager, "UserBotManager", "Оркестратор", "Ротация инициализация ботов цикл проверок")
         Component(uc_start, "startMonitor", "Use case", "Инициализация кэша уведомление о старте")
         Component(uc_check, "checkUserWithCache", "Use case", "Кэш рефреш валидация дат")
@@ -116,6 +116,8 @@ C4Component
     Rel(port_visa, adapter_vfs, "implements")
 ```
 
+**Пояснение:** SheetsUserRepository реализует порт UserRepository и внутри использует lib/sheets → lib/sheetsClientCore (см. [ARCHITECTURE.md](ARCHITECTURE.md) § 1.1).
+
 ---
 
 ## 2. DFD — Data Flow (поток данных)
@@ -131,7 +133,7 @@ flowchart LR
     end
 
     subgraph Process
-        P1[Composition Root<br>или Fallback]
+        P1[Composition Root<br>createMonitorContext]
         P2[UserBotManager]
         P3[Check User<br>+ Cache]
         P4[Attempt Booking]
@@ -216,22 +218,30 @@ sequenceDiagram
     participant Sheets as Google Sheets
     participant TG as Telegram
 
-    Op->>CLI: node ... monitor
+    Op->>CLI: npm start -- monitor
     CLI->>Comp: createMonitorContext(opts)
-    Comp->>Repo: new SheetsUserRepository()
-    Comp->>Cache: new DateCacheAdapter()
-    Comp->>Notif: new TelegramNotificationAdapter()
+    alt opts.repo не передан
+        Comp->>Repo: new SheetsUserRepository()
+    else opts.repo передан (тесты)
+        Comp->>Repo: использовать opts.repo
+    end
+    alt opts.notifications не передан
+        Comp->>Notif: new TelegramNotificationAdapter(config)
+    else opts.notifications передан (тесты)
+        Comp->>Notif: использовать opts.notifications
+    end
     Comp->>Repo: getInitialData()
     Repo->>Sheets: read Users, Cache
     Sheets-->>Repo: users, cacheEntries
     Repo-->>Comp: { users, cacheEntries }
+    Comp->>Cache: new DateCacheAdapter(backend)
+    Comp->>Cache: initialize(cacheEntries)
     Comp-->>CLI: { config, users, cacheEntries, repo, dateCache, notifications }
 
     CLI->>CLI: new UserBotManager(config, deps)
     CLI->>CLI: manager.initializeUsers(users)
     CLI->>Repo: setQuotaNotifier(callback)
     Note over Repo: При превышении квот Sheets — уведомление в Telegram
-    CLI->>Cache: initialize(cacheEntries)
     CLI->>Notif: send("Monitor started...", chatId)
     Notif->>TG: sendMessage
     TG-->>Op: Уведомление
@@ -296,7 +306,7 @@ sequenceDiagram
     participant AIS as AIS API
     participant TG as Telegram
 
-    Op->>CLI: node ... bot -c ... -t ...
+    Op->>CLI: npm start -- bot -c ... -t ...
     CLI->>Bot: new Bot(config)
     CLI->>Bot: initialize()
     Bot->>Client: login()
