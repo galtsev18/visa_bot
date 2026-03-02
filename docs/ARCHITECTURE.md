@@ -22,24 +22,22 @@
 
 ```
 src/
-├── index.js                    # CLI: команды и роутинг
+├── index.ts                    # CLI: команды и роутинг
 ├── commands/
-│   ├── monitor.js              # Multi-user: только composition root → UserBotManager (deps обязательны)
-│   ├── bot.js                  # Single-user (legacy)
-│   ├── health.js               # Метрики и проверка работы
-│   ├── get-chat-id.js
-│   ├── test-sheets.js
-│   └── test-vfs-captcha.js
+│   ├── monitor.ts              # Multi-user: только composition root → UserBotManager (deps обязательны)
+│   ├── bot.ts                   # Single-user (legacy)
+│   ├── health.ts                # Метрики и проверка работы
+│   ├── get-chat-id.ts
+│   ├── test-sheets.ts
+│   └── test-vfs-captcha.ts
 ├── composition/
-│   ├── createMonitorContext.ts # Composition root: адаптеры + конфиг для monitor
-│   └── createMonitorContext.js # Реэкспорт из .ts (запуск из src через tsx)
-├── application/                # Use cases (TypeScript)
+│   └── createMonitorContext.ts # Composition root: адаптеры + конфиг для monitor
+├── application/                # Use cases
 │   ├── startMonitor.ts
 │   ├── checkUserWithCache.ts
 │   ├── attemptBooking.ts
 │   └── types.ts
-├── application/*.js            # Реэкспорт из .ts (запуск из src через tsx)
-├── adapters/                   # Реализации портов (TypeScript)
+├── adapters/                   # Реализации портов
 │   ├── SheetsUserRepository.ts
 │   ├── DateCacheAdapter.ts
 │   ├── EnvConfigProvider.ts
@@ -47,7 +45,7 @@ src/
 │   ├── VisaProviderFactory.ts
 │   ├── ProviderBackedClient.ts  # Обёртка VisaProvider → интерфейс как у VisaHttpClient
 │   └── VfsGlobalProviderAdapter.ts
-├── ports/                      # Интерфейсы (TypeScript)
+├── ports/                      # Интерфейсы
 │   ├── AppConfig.ts
 │   ├── ConfigProvider.ts
 │   ├── DateCache.ts
@@ -56,17 +54,17 @@ src/
 │   ├── VisaProvider.ts
 │   └── User.ts
 └── lib/
-    ├── config.js, logger.js, logger.ts, utils.js
-    ├── user.js, userRotation.js       # Домен
-    ├── userBotManager.js              # Оркестратор monitor
-    ├── bot.js, client.js              # Один бот и AIS HTTP
-    ├── dateCache.js, dateParser.js
-    ├── sheets.js, telegram.js
-    ├── fallbackAdapters.js            # Не используется командой monitor (оставлен для возможных утилит)
-    ├── metrics.js                     # Метрики для health
-    ├── captcha.js, browserCloudflare.js
+    ├── config.ts, logger.ts, utils.ts
+    ├── user.ts, userRotation.ts       # Домен
+    ├── userBotManager.ts             # Оркестратор monitor
+    ├── bot.ts, client.ts             # Один бот и AIS HTTP
+    ├── dateCache.ts, dateParser.ts
+    ├── sheets.ts, telegram.ts
+    ├── fallbackAdapters.ts            # Не используется командой monitor (оставлен для возможных утилит)
+    ├── metrics.ts                    # Метрики для health
+    ├── captcha.ts, browserCloudflare.ts
     └── providers/
-        ├── base.js, ais.js, vfsglobal.js
+        ├── base.ts, ais.ts, vfsglobal.ts
 ```
 
 ### 1.3 Запуск и сборка
@@ -74,16 +72,16 @@ src/
 | Действие | Команда | Описание |
 |----------|---------|----------|
 | Разработка | `npm run dev` | Запуск из `src` через tsx (TypeScript на лету). |
-| Продакшен | `npm start` | Сборка и запуск из `dist`. |
-| Только dist | `npm run start:dist` | Запуск уже собранного `dist/index.js`. |
+| Продакшен | `npm start` | Запуск из `src` через tsx (тот же путь, что и dev). |
+| Только dist | `npm run start:dist` | Запуск уже собранного `dist/index.js` (после `npm run build`). |
 | Тесты | `npm test` | Node test runner с tsx (подгрузка .ts). |
-| Сборка | `npm run build` | tsc → `dist/`. |
+| Сборка | `npm run build` | tsc → `dist/` (опционально, для деплоя через node). |
 
-Исходники в `src` не импортируют из `dist`.
+Исходники в `src` не импортируют из `dist`. В `package.json` поле `"main": "dist/index.js"` задаёт точку входа при запуске из собранного артефакта; основной путь запуска (dev и production) — из исходников через `npm start` или `npm run dev`.
 
 **Рекомендуемый способ запуска:**
-- **Разработка:** `npm run dev` — запуск из `src` через tsx; composition root и адаптеры подгружаются из исходников. Подходит для команд monitor, bot, test-sheets и т.д.
-- **Продакшен и VFS:** `npm run build && npm start` — сборка в `dist/`, запуск из `dist/index.js`. Для провайдера **VFS Global** сборка обязательна: адаптеры (в т.ч. VfsGlobalProviderAdapter) подгружаются из скомпилированного кода. Без сборки при `user.provider === 'vfsglobal'` возможны ошибки загрузки модулей.
+- **Разработка и продакшен:** `npm run dev` или `npm start` — оба запускают `tsx src/index.ts`; composition root и адаптеры подгружаются из исходников. Подходит для команд monitor, bot, test-sheets и т.д., в том числе для провайдера VFS Global.
+- **Запуск из dist:** при необходимости собрать и запускать через Node без tsx: `npm run build && npm run start:dist` (требует, чтобы сборка давала runnable ESM с расширениями в путях; при текущем `moduleResolution: "Bundler"` dist может быть непригоден для прямого запуска через `node`).
 - Команда `monitor` всегда инициализируется через composition root; UserBotManager получает обязательные зависимости (repo, dateCache, notifications) из него.
 
 ---
@@ -110,7 +108,7 @@ Adapters (Sheets, EnvConfig, DateCacheAdapter, Telegram, AIS/VFS)
 
 - **VisaProvider:** `login`, `getAvailableDates`, `getAvailableTime`, `book`. Реализации: AIS (lib + ProviderBackedClient), VFS (VfsGlobalProviderAdapter).
 - **UserRepository:** `getActiveUsers`, `getSettingsOverrides`, `getInitialData`, обновления и лог попыток. Реализация: SheetsUserRepository.
-- **DateCache:** по провайдеру: `getAvailableDates`, `isDateAvailable`, `isCacheStale`, `initialize`, `updateDate`, `refreshAllDates`, `getCacheStats`. Реализация: DateCacheAdapter (обёртка над lib/dateCache.js).
+- **DateCache:** по провайдеру: `getAvailableDates`, `isDateAvailable`, `isCacheStale`, `initialize`, `updateDate`, `refreshAllDates`, `getCacheStats`. Реализация: DateCacheAdapter (обёртка над lib/dateCache).
 - **ConfigProvider:** `getConfig(): Promise<AppConfig>`. Реализации: EnvConfigProvider (только env), MergedConfigProvider (env + Settings).
 - **NotificationSender:** `send(message, chatId)`. Реализация: TelegramNotificationAdapter.
 

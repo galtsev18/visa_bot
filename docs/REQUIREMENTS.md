@@ -14,7 +14,7 @@
 - Валидация дат: раньше текущей записи, в диапазонах, не раньше (today + reaction_time).
 - Букинг: слоты → выбор времени → форма; уведомления об успехе/ошибке.
 - Уведомления в Telegram (успех, слот, ошибка, старт монитора, квоты Sheets).
-- Поддержка нескольких провайдеров (AIS, VFS): при `user.provider === 'vfsglobal'` фабрика возвращает VfsGlobalProviderAdapter; для работы VFS нужен запуск из dist (`npm run build && node dist/index.js monitor`), т.к. адаптеры подгружаются из dist.
+- Поддержка нескольких провайдеров (AIS, VFS): при `user.provider === 'vfsglobal'` фабрика возвращает VfsGlobalProviderAdapter. Запуск приложения (AIS и VFS): `npm start` или `npm run dev` (оба выполняют `tsx src/index.ts`). Поле `main` в package.json указывает на `dist/index.js` для случая запуска из собранного артефакта (см. ARCHITECTURE).
 - Single-user режим (legacy): один пользователь из .env, целевая/минимальная дата.
 
 ## 3. Настройки

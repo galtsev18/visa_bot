@@ -40,13 +40,13 @@
 
 ### 5. Документация: рекомендуемый способ запуска — выполнено
 
-- **Сделано:** в [ARCHITECTURE.md](ARCHITECTURE.md) добавлен блок «Рекомендуемый способ запуска» (dev — `npm run dev`, prod и VFS — `npm run build && npm start`, когда сборка обязательна для VFS). В README указаны примеры запуска.
-- **Связано:** REQUIREMENTS § 2 (VFS и запуск из dist).
+- **Сделано:** в [ARCHITECTURE.md](ARCHITECTURE.md) добавлен блок «Рекомендуемый способ запуска» (dev и prod — `npm start` / `npm run dev` через tsx; при необходимости запуска из dist — `npm run build && npm run start:dist`). В README указаны примеры запуска.
+- **Связано:** REQUIREMENTS § 2 (запуск приложения и VFS).
 
 ### 6. Интеграционные тесты
 
 - **План:** добавить в [TESTING.md](TESTING.md) целевой сценарий: интеграционный тест команды monitor с подменой всех портов (repo, dateCache, notifications, VisaProvider) моками — один цикл от CLI до use cases.
-- **Сделано:** в TESTING.md добавлен подраздел «Целевой сценарий»; добавлен тест `test/integration/monitor-one-cycle.test.js` (тесты остаются .js).: проверка связки createDateCache + DateCacheAdapter + checkUserWithCache (без UserBotManager, чтобы не подгружать lib/telegram).
+- **Сделано:** в TESTING.md добавлен подраздел «Целевой сценарий»; добавлен тест `test/integration/monitor-one-cycle.test.ts`: проверка связки createDateCache + DateCacheAdapter + checkUserWithCache (без UserBotManager, чтобы не подгружать lib/telegram).
 - **Связано:** п. 1, 2; CODE_QUALITY § 7.
 
 ### 7. Поведение при перезапуске и границы масштабирования — выполнено
@@ -58,7 +58,7 @@
 ### 8. Типизация lib и commands — выполнено
 
 - **План:** постепенная миграция `lib/` и `commands/` на TypeScript.
-- **Сделано:** весь `src/` переведён на TypeScript. Удалены реэкспортные `.js`, удалён скрипт `scripts/update-ts-exclude.js`. В tsconfig `exclude` только `["node_modules", "dist"]`. `main` в package.json указывает на `dist/index.js`, `dev` запускает `tsx src/index.ts`.
+- **Сделано:** весь `src/` и тесты на TypeScript. Импорты без расширений, `moduleResolution: "Bundler"`. Запуск: `npm start` и `npm run dev` — оба через `tsx src/index.ts`.
 - **Связано:** TECH_DEBT § 1 (типизация); ADR 0002.
 
 ### 9. Неиспользуемый код — частично выполнено
@@ -75,7 +75,7 @@
 - [x] UserBotManager принимает только обязательные deps (repo, dateCache, notifications)
 - [x] Устранение глобального состояния в lib для dateCache (createDateCache + DI в DateCacheAdapter); sheets/telegram — в планах
 - [x] ConfigProvider возвращает объединённый AppConfig (env + Settings через MergedConfigProvider)
-- [x] В ARCHITECTURE и README описан рекомендуемый способ запуска и необходимость сборки для VFS
+- [x] В ARCHITECTURE и README описан рекомендуемый способ запуска (npm start / npm run dev через tsx)
 - [x] В TESTING.md добавлен сценарий интеграционного теста monitor с моками портов
 - [x] В ARCHITECTURE описано поведение при перезапуске и границы многопроцессного запуска
 - [x] Миграция lib/commands на TypeScript (выполнено полностью)

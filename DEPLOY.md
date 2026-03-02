@@ -1,6 +1,6 @@
 # Deploy US Visa Bot on a server (autonomous, restart on crash)
 
-The bot runs as a **systemd service**: it starts on boot and restarts automatically if it crashes.
+The bot runs as a **systemd service**: it starts on boot and restarts automatically if it crashes. The service runs `npm start -- monitor`, which executes the app from TypeScript source via **tsx** (no separate build step). Ensure `src/`, `package.json`, and `tsconfig.json` are deployed so that `npm start` works.
 
 ## 1. Server requirements
 
@@ -45,7 +45,7 @@ mkdir -p /opt/us-visa-bot
 From your **local machine** (PowerShell or Git Bash, in the project folder):
 
 ```bash
-scp -r src package.json package-lock.json deploy .env.example root@YOUR_SERVER_IP:/opt/us-visa-bot/
+scp -r src package.json package-lock.json tsconfig.json deploy .env.example root@YOUR_SERVER_IP:/opt/us-visa-bot/
 scp credentials.json root@YOUR_SERVER_IP:/opt/us-visa-bot/
 ```
 
@@ -94,7 +94,7 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/opt/us-visa-bot
-ExecStart=/usr/bin/env node src/index.js monitor
+ExecStart=/usr/bin/env npm start -- monitor
 Restart=on-failure
 RestartSec=15
 StandardOutput=journal
@@ -154,7 +154,7 @@ journalctl -u us-visa-bot -f
 From your PC, copy updated code (e.g. after git pull or local changes):
 
 ```bash
-scp -r src package.json root@YOUR_SERVER_IP:/opt/us-visa-bot/
+scp -r src package.json package-lock.json tsconfig.json root@YOUR_SERVER_IP:/opt/us-visa-bot/
 ssh root@YOUR_SERVER_IP "cd /opt/us-visa-bot && npm install --production && systemctl restart us-visa-bot"
 ```
 

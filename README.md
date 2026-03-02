@@ -89,7 +89,7 @@ REFRESH_DELAY=3
 
 ## Usage
 
-**Запуск:** для разработки — `npm run dev` (запуск из `src` через tsx); для продакшена и провайдера VFS Global — `npm run build && npm start` (сборка в `dist/`). Команда `monitor` всегда использует composition root (адаптеры портов).
+**Запуск:** `npm start` или `npm run dev` — оба запускают приложение из `src` через tsx. При необходимости запуска из скомпилированного кода: `npm run build && npm run start:dist`. Команда `monitor` всегда использует composition root (адаптеры портов).
 
 ### Multi-User Mode (Recommended)
 
@@ -102,8 +102,8 @@ npm run dev -- test-sheets
 # Start monitoring (dev)
 npm run dev -- monitor
 
-# Production (and VFS support). Use -- to pass arguments to the start script.
-npm run build && npm start -- monitor
+# Production (same as dev: tsx from src)
+npm start -- monitor
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) or [SETUP.md](SETUP.md) for detailed setup instructions.
