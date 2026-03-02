@@ -21,10 +21,10 @@ The VFS site may show a **Cloudflare** security page (“Performing security ver
 - If the page includes a **Turnstile** widget (with a `data-sitekey` in the HTML), it can **solve** it via 2Captcha and try to pass the challenge.
 - If no Turnstile sitekey is present (challenge is JS-only), use the **`--browser`** option to pass the challenge with a headless browser (Puppeteer).
 
-Test and debug:
+Test and debug (none of these submit credentials unless you pass `--email` and `--password`):
 
 ```bash
-npm start -- test-vfs-captcha           # detect Cloudflare / captcha type
+npm start -- test-vfs-captcha           # fetch page, detect Cloudflare / captcha type (no login)
 npm start -- test-vfs-captcha --browser  # use Puppeteer to pass JS-only Cloudflare, then show login form/captcha
 npm start -- test-vfs-captcha --solve   # solve Turnstile (if sitekey found) and try to pass
 npm start -- test-vfs-captcha --browser --solve   # open in browser, intercept Cloudflare Turnstile params, solve via 2Captcha, then get login page

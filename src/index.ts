@@ -40,7 +40,9 @@ program
 
 program
   .command('test-vfs-captcha')
-  .description('Test VFS login page: detect captcha type and optionally solve it')
+  .description(
+    'Test VFS login page: detect captcha type and optionally solve it (no login unless --email and --password)'
+  )
   .option('--browser', 'Use browser (Puppeteer) to try to pass Cloudflare')
   .option('--visible', 'Show browser window (use with --browser; Cloudflare may pass more often)')
   .option(
