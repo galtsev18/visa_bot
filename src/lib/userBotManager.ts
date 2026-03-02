@@ -1,4 +1,6 @@
 import { Bot } from './bot';
+import { createVisaProvider } from '../adapters/VisaProviderFactory';
+import { ProviderBackedClient } from '../adapters/ProviderBackedClient';
 import { getNextUser, updateUserPriority } from './userRotation';
 import {
   formatBookingSuccessWithDetails,
@@ -67,13 +69,6 @@ export class UserBotManager {
 
     logger.info(`Initializing ${users.length} users...`);
 
-    let adapterModule: unknown = null;
-    try {
-      adapterModule = await import('../adapters/index');
-    } catch (err) {
-      logger.warn(`Adapters not loaded (expected when running from src): ${formatErrorForLog(err)}`);
-    }
-
     for (const user of users) {
       try {
         const botConfig = {
@@ -88,26 +83,19 @@ export class UserBotManager {
           captchaApiKey: this.config.captcha2CaptchaApiKey ?? null,
         };
 
-        let client: import('./bot').BotClient | null = null;
-        const mod = adapterModule as {
-          createVisaProvider?: (id: string, opts: object) => unknown;
-          ProviderBackedClient?: new (provider: unknown, opts: object) => import('./bot').BotClient;
-        };
-        if (mod?.createVisaProvider && mod?.ProviderBackedClient) {
-          const provider = mod.createVisaProvider(botConfig.provider, {
-            captcha2CaptchaApiKey: this.config.captcha2CaptchaApiKey ?? null,
-            captchaSolver: this.config.captchaSolver ?? null,
-          });
-          client = new mod.ProviderBackedClient!(provider, {
-            email: user.email,
-            password: user.password,
-            countryCode: user.countryCode,
-            scheduleId: user.scheduleId,
-            facilityId: this.config.facilityId ?? 134,
-          });
-        }
+        const provider = createVisaProvider(botConfig.provider, {
+          captcha2CaptchaApiKey: this.config.captcha2CaptchaApiKey ?? null,
+          captchaSolver: this.config.captchaSolver ?? null,
+        });
+        const client = new ProviderBackedClient(provider, {
+          email: user.email,
+          password: user.password,
+          countryCode: user.countryCode,
+          scheduleId: user.scheduleId,
+          facilityId: this.config.facilityId ?? 134,
+        });
 
-        const bot = new Bot(botConfig, client ? { client } : {});
+        const bot = new Bot(botConfig, { client });
         const sessionHeaders = await bot.initialize();
 
         this.bots.set(user.email, bot);

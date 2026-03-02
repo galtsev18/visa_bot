@@ -2,6 +2,8 @@ import { Bot } from '../lib/bot';
 import { getConfig } from '../lib/config';
 import { logger } from '../lib/logger';
 import { sleep, isSocketHangupError, formatErrorForLog } from '../lib/utils';
+import { createVisaProvider } from '../adapters/VisaProviderFactory';
+import { ProviderBackedClient } from '../adapters/ProviderBackedClient';
 
 const COOLDOWN = 3600; // 1 hour in seconds
 
@@ -14,7 +16,19 @@ export interface BotCommandOptions {
 
 export async function botCommand(options: BotCommandOptions): Promise<void> {
   const config = getConfig();
-  const bot = new Bot(config as import('../lib/bot').BotConfig, { dryRun: options.dryRun });
+  const providerId = (config as { provider?: string }).provider ?? 'ais';
+  const provider = createVisaProvider(providerId, {
+    captcha2CaptchaApiKey: config.captcha2CaptchaApiKey ?? null,
+    captchaSolver: config.captchaSolver ?? null,
+  });
+  const client = new ProviderBackedClient(provider, {
+    email: config.email!,
+    password: config.password!,
+    countryCode: config.countryCode!,
+    scheduleId: config.scheduleId,
+    facilityId: config.facilityId,
+  });
+  const bot = new Bot(config as import('../lib/bot').BotConfig, { client, dryRun: options.dryRun });
   let currentBookedDate = options.current ?? null;
   const targetDate = options.target;
   const minDate = options.min;

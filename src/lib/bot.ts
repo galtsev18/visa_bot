@@ -1,4 +1,3 @@
-import { VisaHttpClient } from './client';
 import { logger } from './logger';
 
 export interface BotClient {
@@ -35,7 +34,8 @@ export interface BotConfig {
 
 export interface BotOptions {
   dryRun?: boolean;
-  client?: BotClient;
+  /** Required: use ProviderBackedClient from VisaProviderFactory (single entry point for AIS/VFS). */
+  client: BotClient;
 }
 
 export class Bot {
@@ -43,12 +43,13 @@ export class Bot {
   dryRun: boolean;
   client: BotClient;
 
-  constructor(config: BotConfig, options: BotOptions = {}) {
+  constructor(config: BotConfig, options: BotOptions) {
+    if (!options?.client) {
+      throw new Error('Bot requires options.client (e.g. ProviderBackedClient from createVisaProvider).');
+    }
     this.config = config;
     this.dryRun = options.dryRun ?? false;
-    this.client =
-      options.client ??
-      new VisaHttpClient(this.config.countryCode, this.config.email, this.config.password);
+    this.client = options.client;
   }
 
   async initialize(): Promise<Record<string, string> | Record<string, unknown>> {
