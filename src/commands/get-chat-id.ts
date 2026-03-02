@@ -100,9 +100,9 @@ export async function getChatIdCommand(): Promise<never> {
         logger.info(`Chat Type: ${chatType}`);
         logger.info(`Chat Name: ${chatTitle}`);
         logger.info('\n✅ Your Telegram Manager Chat ID is:');
-        console.logger.info(`\n${'='.repeat(50)}`);
-        console.logger.info(`TELEGRAM_MANAGER_CHAT_ID=${chatId}`);
-        console.logger.info(`${'='.repeat(50)}\n`);
+        logger.info(`\n${'='.repeat(50)}`);
+        logger.info(`TELEGRAM_MANAGER_CHAT_ID=${chatId}`);
+        logger.info(`${'='.repeat(50)}\n`);
         logger.info(
           'Copy this value to your .env or to the Settings sheet (key: TELEGRAM_MANAGER_CHAT_ID).'
         );
@@ -135,9 +135,9 @@ export async function getChatIdCommand(): Promise<never> {
           logger.info(`Chat Name: ${chatTitle}`);
           logger.info(`Message: ${u.message.text ?? '(no text)'}`);
           logger.info('\n✅ Your Telegram Manager Chat ID is:');
-          console.logger.info(`\n${'='.repeat(50)}`);
-          console.logger.info(`TELEGRAM_MANAGER_CHAT_ID=${lastChatId}`);
-          console.logger.info(`${'='.repeat(50)}\n`);
+          logger.info(`\n${'='.repeat(50)}`);
+          logger.info(`TELEGRAM_MANAGER_CHAT_ID=${lastChatId}`);
+          logger.info(`${'='.repeat(50)}\n`);
           logger.info(
             'Copy this value to your .env or to the Settings sheet (key: TELEGRAM_MANAGER_CHAT_ID).'
           );
@@ -160,7 +160,7 @@ export async function getChatIdCommand(): Promise<never> {
       if (lastChatId !== null) {
         logger.info(`\nLast chat ID found: ${lastChatId}`);
         logger.info('Add to .env or Settings sheet:');
-        console.logger.info(`TELEGRAM_MANAGER_CHAT_ID=${lastChatId}`);
+        logger.info(`TELEGRAM_MANAGER_CHAT_ID=${lastChatId}`);
       } else {
         logger.info('No messages received. Send a message to your bot and try again.');
       }

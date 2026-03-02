@@ -92,4 +92,10 @@ export interface UserRepository {
     times?: string[],
     facilityId?: number
   ): Promise<void>;
+
+  /**
+   * Optional: subscribe to quota events (e.g. Google Sheets 429).
+   * Implemented by SheetsUserRepository; no-op if not supported.
+   */
+  setQuotaNotifier?(fn: (event: 'exceeded' | 'resolved') => void): void;
 }

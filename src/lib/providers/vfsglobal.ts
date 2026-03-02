@@ -201,7 +201,7 @@ export class VfsGlobalClient {
         const imgRes = await fetch(src, {
           headers: { Cookie: res.headers.get('set-cookie') || '' },
         });
-        const buf = await (imgRes as { buffer: () => Promise<Buffer> }).buffer();
+        const buf = await (imgRes as unknown as { buffer: () => Promise<Buffer> }).buffer();
         imageBase64 = buf.toString('base64');
       } else if (src.startsWith('data:')) {
         imageBase64 = src;

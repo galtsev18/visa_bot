@@ -20,7 +20,7 @@ export async function monitorCommand(options: MonitorCommandOptions = {}): Promi
     const { config, users, cacheEntries, repo, dateCache, notifications } = ctx;
     const managerDeps = { repo, dateCache, notifications };
 
-    repo.setQuotaNotifier((event) => {
+    repo.setQuotaNotifier?.((event: 'exceeded' | 'resolved') => {
       const msg =
         event === 'exceeded'
           ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'

@@ -230,12 +230,12 @@ export async function testVfsCaptchaCommand(
           const imgRes = await fetch(imageBase64, {
             headers: { Cookie: getCookieHeader() },
           });
-          const buf = await (imgRes as { buffer: () => Promise<Buffer> }).buffer();
+          const buf = await (imgRes as unknown as { buffer: () => Promise<Buffer> }).buffer();
           imageBase64 = buf.toString('base64');
         } else if (imageBase64.startsWith('/')) {
           const imgUrl = new URL(imageBase64, VFS_LOGIN_URL).href;
           const imgRes = await fetch(imgUrl, { headers: { Cookie: getCookieHeader() } });
-          const buf = await (imgRes as { buffer: () => Promise<Buffer> }).buffer();
+          const buf = await (imgRes as unknown as { buffer: () => Promise<Buffer> }).buffer();
           imageBase64 = buf.toString('base64');
         }
         const solution = await solveImageCaptcha(imageBase64, {

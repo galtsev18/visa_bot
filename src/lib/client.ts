@@ -101,7 +101,17 @@ export class VisaHttpClient {
   }
 
   // Private request methods
-  _fetchWithTimeout(url: string, options: { timeout?: number; headers?: Record<string, string>; method?: string; redirect?: 'follow' | 'manual'; body?: URLSearchParams; cache?: string } = {}): Promise<Response> {
+  _fetchWithTimeout(
+    url: string,
+    options: {
+      timeout?: number;
+      headers?: Record<string, string>;
+      method?: string;
+      redirect?: 'follow' | 'manual';
+      body?: URLSearchParams;
+      cache?: RequestCache;
+    } = {}
+  ): Promise<Response> {
     const timeoutMs = options.timeout ?? REQUEST_TIMEOUT_MS;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
