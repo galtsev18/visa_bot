@@ -1,11 +1,9 @@
 import * as chrono from 'chrono-node';
+import type { ParsedDateRange } from '../domain/dateUtils';
 import { logger } from './logger';
 import { formatErrorForLog } from './utils';
 
-export interface ParsedDateRange {
-  from: Date;
-  to: Date;
-}
+export type { ParsedDateRange } from '../domain/dateUtils';
 
 /**
  * Parse a date string to a Date object.
@@ -70,40 +68,5 @@ export function parseDateRanges(ranges: unknown): ParsedDateRange[] {
     .filter((range): range is ParsedDateRange => range !== null);
 }
 
-/**
- * Check if a date falls within any of the given date ranges.
- */
-export function isDateInRanges(date: Date | string | null | undefined, ranges: ParsedDateRange[]): boolean {
-  if (!date || !ranges || ranges.length === 0) {
-    return false;
-  }
-
-  const dateObj: Date = date instanceof Date ? date : new Date(date + 'T00:00:00');
-
-  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
-    return false;
-  }
-
-  const checkDate = new Date(dateObj);
-  checkDate.setHours(0, 0, 0, 0);
-
-  return ranges.some((range) => checkDate >= range.from && checkDate <= range.to);
-}
-
-/**
- * Format a date to YYYY-MM-DD string.
- */
-export function formatDate(date: Date | string | null | undefined): string | null {
-  if (typeof date === 'string') {
-    return date.split('T')[0] ?? null;
-  }
-
-  if (date instanceof Date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  return null;
-}
+/** Re-export for callers that still use lib/dateParser. Prefer domain/dateUtils. */
+export { isDateInRanges, formatDate } from '../domain/dateUtils';

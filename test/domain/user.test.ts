@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { User } from '../../src/lib/user.js';
+import { createUser } from '../../src/lib/user.js';
 
 describe('User', () => {
   describe('isDateEarlierThanCurrent', () => {
     it('returns true when user has no current date', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: null,
         date_ranges: [{ from: '2025-01-01', to: '2025-12-31' }],
@@ -14,7 +14,7 @@ describe('User', () => {
     });
 
     it('returns true when date is earlier than current', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-08-01',
         date_ranges: [{ from: '2025-01-01', to: '2025-12-31' }],
@@ -23,7 +23,7 @@ describe('User', () => {
     });
 
     it('returns false when date is same as current', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-06-15',
         date_ranges: [{ from: '2025-01-01', to: '2025-12-31' }],
@@ -32,7 +32,7 @@ describe('User', () => {
     });
 
     it('returns false when date is later than current', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-06-01',
         date_ranges: [{ from: '2025-01-01', to: '2025-12-31' }],
@@ -43,7 +43,7 @@ describe('User', () => {
 
   describe('isDateInRange', () => {
     it('returns true when date is inside a range', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         date_ranges: [{ from: '2025-06-01', to: '2025-06-30' }],
       });
@@ -51,7 +51,7 @@ describe('User', () => {
     });
 
     it('returns false when date is outside ranges', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         date_ranges: [{ from: '2025-06-01', to: '2025-06-30' }],
       });
@@ -59,14 +59,14 @@ describe('User', () => {
     });
 
     it('returns false when no date ranges', () => {
-      const user = new User({ email: 'a@b.com', date_ranges: [] });
+      const user = createUser({ email: 'a@b.com', date_ranges: [] });
       assert.strictEqual(user.isDateInRange('2025-06-15'), false);
     });
   });
 
   describe('isDateAfterReactionTime', () => {
     it('returns true when reactionTime is 0', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         reaction_time: 0,
       });
@@ -74,7 +74,7 @@ describe('User', () => {
     });
 
     it('returns true when date is at or after today + reaction_time', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         reaction_time: 1,
       });
@@ -91,7 +91,7 @@ describe('User', () => {
 
   describe('isDateValid', () => {
     it('returns true when date is earlier, in range, and after reaction time', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-12-01',
         reaction_time: 0,
@@ -101,7 +101,7 @@ describe('User', () => {
     });
 
     it('returns false when date is not in range', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-12-01',
         reaction_time: 0,
@@ -111,7 +111,7 @@ describe('User', () => {
     });
 
     it('returns false when date is not earlier than current', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-06-01',
         reaction_time: 0,
@@ -123,7 +123,7 @@ describe('User', () => {
 
   describe('needsAppointment', () => {
     it('returns true when user has no current date', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: null,
         date_ranges: [{ from: '2025-01-01', to: '2025-12-31' }],
@@ -132,7 +132,7 @@ describe('User', () => {
     });
 
     it('returns true when current date is outside ranges', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-07-15',
         date_ranges: [{ from: '2025-01-01', to: '2025-06-30' }],
@@ -141,7 +141,7 @@ describe('User', () => {
     });
 
     it('returns false when current date is inside a range', () => {
-      const user = new User({
+      const user = createUser({
         email: 'a@b.com',
         current_date: '2025-06-15',
         date_ranges: [{ from: '2025-06-01', to: '2025-06-30' }],

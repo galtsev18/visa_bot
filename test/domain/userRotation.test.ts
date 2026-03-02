@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { getNextUser, updateUserPriority } from '../../src/lib/userRotation.js';
-import { User } from '../../src/lib/user.js';
+import { getNextUser, updateUserPriority } from '../../src/domain/userRotation.js';
+import { createUser, User } from '../../src/lib/user.js';
 import type { RawUserInput } from '../../src/lib/user.js';
 
 function makeUser(overrides: Partial<RawUserInput> = {}): User {
-  return new User({
+  return createUser({
     email: 'u@test.com',
     active: true,
     current_date: null,

@@ -47,6 +47,10 @@ src/
 │   ├── VisaProviderFactory.ts
 │   ├── ProviderBackedClient.ts  # Обёртка VisaProvider → интерфейс как у VisaHttpClient
 │   └── VfsGlobalProviderAdapter.ts
+├── domain/                     # Домен: сущности и правила без I/O
+│   ├── dateUtils.ts            # ParsedDateRange, isDateInRanges, formatDate
+│   ├── User.ts                 # Класс User (порт User)
+│   └── userRotation.ts         # getNextUser, updateUserPriority, getRotationStats
 ├── ports/                      # Интерфейсы
 │   ├── AppConfig.ts
 │   ├── ConfigProvider.ts
@@ -57,8 +61,8 @@ src/
 │   └── User.ts
 └── lib/
     ├── config.ts, logger.ts, utils.ts
-    ├── user.ts, userRotation.ts       # Домен
-    ├── userBotManager.ts             # Оркестратор monitor
+    ├── user.ts                 # Фабрика createUser(raw) → domain User
+    ├── userBotManager.ts       # Оркестратор monitor
     ├── bot.ts, client.ts             # Один бот и AIS HTTP
     ├── dateCache.ts, dateParser.ts
     ├── sheets.ts, telegram.ts
@@ -95,16 +99,18 @@ src/
 ### 2.1 Схема
 
 ```
-CLI (monitor, bot, health, test-*) 
+CLI (monitor, bot, health, test-*)
         ↓
 Application (startMonitor, checkUserWithCache, attemptBooking)
         ↓
-Domain (User, userRotation) — без I/O
+Domain (User, userRotation, dateUtils) — без I/O, в src/domain/
         ↑
-Ports (UserRepository, DateCache, ConfigProvider, NotificationSender, VisaProvider)
+Ports (UserRepository, DateCache, ConfigProvider, NotificationSender, VisaProvider, User)
         ↑
 Adapters (Sheets, EnvConfig, DateCacheAdapter, Telegram, AIS/VFS)
 ```
+
+Домен не импортирует из application, adapters, lib; только из ports (интерфейс User). Создание User из сырых данных (sheet/env) — фабрика `createUser()` в lib/user.ts.
 
 ### 2.2 Ключевые абстракции
 

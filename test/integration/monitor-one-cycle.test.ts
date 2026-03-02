@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { User } from '../../src/lib/user';
+import { createUser, User } from '../../src/lib/user';
 import { checkUserWithCache } from '../../src/application/checkUserWithCache';
 import { createDateCache } from '../../src/lib/dateCache';
 import { DateCacheAdapter } from '../../src/adapters/DateCacheAdapter';
@@ -27,7 +27,7 @@ function makeConfig(overrides: Record<string, unknown> = {}): Record<string, unk
 }
 
 function makeMockUser(): User {
-  return new User({
+  return createUser({
     email: 'integration@test.com',
     password: 'secret',
     country_code: 'kz',

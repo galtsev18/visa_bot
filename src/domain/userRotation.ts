@@ -1,5 +1,8 @@
+/**
+ * Domain: user rotation (select next user by priority, update priority).
+ * Pure logic; caller (e.g. UserBotManager) may log the selected user.
+ */
 import type { User } from '../ports/User';
-import { logger } from './logger';
 
 export function getNextUser(users: User[], cooldown = 30): User | null {
   if (!users || users.length === 0) return null;
@@ -32,8 +35,6 @@ export function getNextUser(users: User[], cooldown = 30): User | null {
 
   usersWithPriority.sort((a, b) => b.priority - a.priority);
   const selected = usersWithPriority[0];
-  logger.info(`Selected user ${selected.user.email} with priority ${selected.priority.toFixed(2)}`);
-
   return selected.user;
 }
 

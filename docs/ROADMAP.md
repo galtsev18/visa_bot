@@ -32,6 +32,7 @@
   - Обновить импорты в application, composition, adapters; оставить в `lib/` только инфраструктурные вещи (config, logger, utils, client, dateCache, sheets, telegram, providers).
   - Зафиксировать решение в ADR и обновить [ARCHITECTURE.md](ARCHITECTURE.md) (дерево исходников, схема слоёв).
 - **Критерий:** домен не импортирует из application, adapters, lib (кроме возможно общих типов/утилит без I/O); тесты и линт проходят.
+- **Выполнено:** каталог `src/domain/` (dateUtils, User, userRotation); порт User в ports/; фабрика createUser в lib/user.ts; ADR [0003-domain-layer](adr/0003-domain-layer.md), обновлён ARCHITECTURE.md.
 
 ### 4. Разделение lib/sheets (средний риск, после или параллельно п.3)
 

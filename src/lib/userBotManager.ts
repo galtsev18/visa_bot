@@ -1,7 +1,7 @@
 import { Bot } from './bot';
 import { createVisaProvider } from '../adapters/VisaProviderFactory';
 import { ProviderBackedClient } from '../adapters/ProviderBackedClient';
-import { getNextUser, updateUserPriority } from './userRotation';
+import { getNextUser, updateUserPriority } from '../domain/userRotation';
 import {
   formatBookingSuccessWithDetails,
   formatSlotFound,

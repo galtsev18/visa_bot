@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { logger } from './logger';
 import { sleep, formatErrorForLog } from './utils';
-import { User } from './user';
+import { createUser, User } from './user';
 
 type SheetsV4 = ReturnType<typeof google.sheets>;
 
@@ -450,7 +450,7 @@ async function readUsersImpl(s: SheetsClientState): Promise<User[]> {
         try {
           const oneBasedRow = i + 1;
           (userData as Record<string, unknown>).rowIndex = oneBasedRow;
-          const user = new User(userData as import('./user').RawUserInput);
+          const user = createUser(userData);
           users.push(user);
           s.emailToRowIndex.set(user.email, oneBasedRow);
         } catch (error) {
@@ -500,7 +500,7 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
         try {
           const oneBasedRow = i + 1;
           (userData as Record<string, unknown>).rowIndex = oneBasedRow;
-          const user = new User(userData as import('./user').RawUserInput);
+          const user = createUser(userData);
           users.push(user);
           s.emailToRowIndex.set(user.email, oneBasedRow);
         } catch (err) {
