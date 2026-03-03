@@ -1,3 +1,3 @@
 @echo off
-node src/index.js test-sheets
+npm start -- test-sheets
 pause

@@ -81,7 +81,7 @@ export async function testSheetsCommand(): Promise<void> {
     logger.info('✅ ALL TESTS PASSED!');
     logger.info('='.repeat(60));
     logger.info('\nYour Google Sheets setup is working correctly.');
-    logger.info('You can now run: node src/index.js monitor');
+    logger.info('You can now run: npm start -- monitor');
     logger.info('\nNote: Test entries were added to Cache and Logs sheets.');
     logger.info('You can delete them manually if desired.');
   } catch (error) {

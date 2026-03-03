@@ -1,3 +1,3 @@
 @echo off
-node src/index.js get-chat-id
+npm start -- get-chat-id
 pause

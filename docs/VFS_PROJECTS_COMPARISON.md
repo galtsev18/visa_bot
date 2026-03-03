@@ -18,6 +18,10 @@
 | berkay-digital / VFS-BOT | https://github.com/berkay-digital/VFS-BOT |
 | securitsa / vfs-global-appointment-system | https://github.com/securitsa/vfs-global-appointment-system |
 | IndiaTransform / VFS-VISA-APPOINTMENT-BOT-AUTOMATION-POLAND | https://github.com/IndiaTransform/VFS-VISA-APPOINTMENT-BOT-AUTOMATION-POLAND |
+| barrriwa / vfsauto | https://github.com/barrriwa/vfsauto |
+| mominurr / visa.vfsglobal.com | https://github.com/mominurr/visa.vfsglobal.com |
+| kosiakMD / vfs-bot-free-slots-notify | https://github.com/kosiakMD/vfs-bot-free-slots-notify |
+| jimiljojo / visa-slot-bot | https://github.com/jimiljojo/visa-slot-bot |
 
 ---
 
@@ -35,6 +39,10 @@
 | [berkay-digital/VFS-BOT](https://github.com/berkay-digital/VFS-BOT/issues) | **3** (архив) | [#1](https://github.com/berkay-digital/VFS-BOT/issues/1) The new cloudflare system not working (Turnstile); [#2](https://github.com/berkay-digital/VFS-BOT/issues/2) get error message when try to login («Mandatory field cannot be left empty» после reCAPTCHA); [#3](https://github.com/berkay-digital/VFS-BOT/issues/3) Can you help? (запрос платного бота) |
 | [securitsa/vfs-global-appointment-system](https://github.com/securitsa/vfs-global-appointment-system/issues) | 0 | — |
 | [IndiaTransform/VFS-VISA-APPOINTMENT-BOT-AUTOMATION-POLAND](https://github.com/IndiaTransform/VFS-VISA-APPOINTMENT-BOT-AUTOMATION-POLAND/issues) | 0 | — |
+| [barrriwa/vfsauto](https://github.com/barrriwa/vfsauto/issues) | 1 | проект не обновляется (VFS ввёл баны аккаунтов) |
+| [mominurr/visa.vfsglobal.com](https://github.com/mominurr/visa.vfsglobal.com/issues) | 0 | — |
+| [kosiakMD/vfs-bot-free-slots-notify](https://github.com/kosiakMD/vfs-bot-free-slots-notify/issues) | 2 | — |
+| [jimiljojo/visa-slot-bot](https://github.com/jimiljojo/visa-slot-bot/issues) | 0 | не скрапит VFS, только мониторинг Telegram-канала |
 
 **Выводы по issues:** У ranjan-mohanty — постоянные запросы на интеграцию солверов капчи (CaptchaAI и др.) и поддержку новых стран (Португалия и т.д.). У berkay-digital (архив) типичные проблемы: Cloudflare Turnstile и ошибка «Mandatory field cannot be left empty» после прохождения reCAPTCHA при логине — полезно учитывать при доработке нашего VFS-логина и капчи.
 
@@ -104,6 +112,37 @@
 ### 8. [IndiaTransform/VFS-VISA-APPOINTMENT-BOT-AUTOMATION-POLAND](https://github.com/IndiaTransform/VFS-VISA-APPOINTMENT-BOT-AUTOMATION-POLAND)
 
 - **Коммерческий:** Оплата по WhatsApp/телефону. Заявлено: ротация прокси, мультицентры, Excel с данными, автологин, «Auto Captcha Resolver», чтение OTP из почты, доведение до оплаты. Детали реализации закрыты.
+
+---
+
+## Дополнительные репозитории (найдены при повторном поиске)
+
+| Проект | Стек / назначение | Звёзды |
+|--------|--------------------|--------|
+| [barrriwa/vfsauto](https://github.com/barrriwa/vfsauto) | Browser Automation Studio (BAS), .xml-скрипт: мониторинг и букинг слотов, Cloudflare, прокси, Fingerprint Switcher, Telegram. **Не поддерживается** — VFS ввёл баны аккаунтов. | 5 |
+| [mominurr/visa.vfsglobal.com](https://github.com/mominurr/visa.vfsglobal.com) | Python: обход Cloudflare, reCAPTCHA-солвер, ротация прокси, уведомления по email. Скрипты по странам: Италия (`vfsglobal_italy.py`), Нидерланды (`vfsglobal_nld.py`). | 7 |
+| [kosiakMD/vfs-bot-free-slots-notify](https://github.com/kosiakMD/vfs-bot-free-slots-notify) | **Расширение для браузера** (JavaScript, manifest.json): уведомления в Telegram и на рабочий стол о появлении свободных слотов на VFS. MIT. | 10 |
+| [jimiljojo/visa-slot-bot](https://github.com/jimiljojo/visa-slot-bot) | Python + Telegram API: **не скрапит VFS напрямую** — следит за Telegram-каналом (например, с дропбокс-слотами), при появлении скриншотов слотов шлёт уведомление на macOS. | 14 |
+
+### 9. [barrriwa/vfsauto](https://github.com/barrriwa/vfsauto)
+
+- **Стек:** Browser Automation Studio (BAS), один .xml-файл. Платформа Bablosoft (платная), Fingerprint Switcher, PerfectCanvas.
+- **Подход:** Импорт vfsauto.xml в BAS → настройка прокси, Telegram, отпечатков → запуск; автоматическая проверка календаря и букинг при появлении слота. Виртуальная клавиатура, «человекоподобные» движения мыши, обработка капчи.
+- **Ограничение:** Автор объявил проект устаревшим из‑за банов VFS и больше не обновляет.
+
+### 10. [mominurr/visa.vfsglobal.com](https://github.com/mominurr/visa.vfsglobal.com)
+
+- **Стек:** Python, отдельные скрипты по странам (Italy, NLD).
+- **Подход:** Обход Cloudflare, решение reCAPTCHA, ротация IP/прокси, проверка доступных слотов, уведомление по email. Близко по идее к нашему сценарию (капча + уведомления).
+
+### 11. [kosiakMD/vfs-bot-free-slots-notify](https://github.com/kosiakMD/vfs-bot-free-slots-notify)
+
+- **Стек:** Расширение для браузера (JS, popup, manifest).
+- **Подход:** Пользователь открывает страницу VFS в браузере с установленным расширением; расширение отслеживает появление свободных слотов и шлёт уведомления в Telegram и на рабочий стол. Не headless — нужен открытый браузер.
+
+### 12. [jimiljojo/visa-slot-bot](https://github.com/jimiljojo/visa-slot-bot)
+
+- **Назначение:** Не работа с сайтом VFS, а мониторинг **Telegram-канала** (например, канала с скриншотами слотов Dropbox). При появлении контента со слотами скрипт отправляет десктоп-уведомление. Полезен как доп. канал оповещения, если кто-то публикует слоты в канале.
 
 ---
 

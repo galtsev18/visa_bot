@@ -151,7 +151,7 @@ export class VfsGlobalClient {
       throw new Error(
         'VFS Global returned a Cloudflare challenge page ("Just a moment..."). ' +
           'No Turnstile sitekey was found; passing it usually requires a headless browser (e.g. Puppeteer). ' +
-          'Run: node src/index.js test-vfs-captcha --solve'
+          'Run: npm start -- test-vfs-captcha --solve'
       );
     }
 

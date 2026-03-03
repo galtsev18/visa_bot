@@ -1,3 +1,3 @@
 @echo off
-node src/index.js monitor
+npm start -- monitor
 pause

@@ -10,5 +10,5 @@ if "%1"=="" (
     exit /b 1
 )
 
-node src/index.js bot -c %1 %2 %3 %4 %5
+npm start -- bot -c %1 %2 %3 %4 %5
 pause
