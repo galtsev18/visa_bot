@@ -2,6 +2,12 @@ import cheerio from 'cheerio';
 import { logger } from '../logger';
 import { formatErrorForLog } from '../utils';
 import { solveImageCaptcha, solveRecaptchaV2, solveTurnstile } from '../captcha';
+import {
+  vfsBrowserLogin,
+  vfsGetAvailableDatesFromPage,
+  vfsGetAvailableTimeFromPage,
+  vfsBookFromPage,
+} from './vfsBrowserFlow';
 
 const VFS_BASE_URI = 'https://visa.vfsglobal.com';
 
@@ -19,11 +25,26 @@ export interface VfsConfig {
   password: string;
   captchaSolver?: CaptchaSolver | null;
   captchaApiKey?: string | null;
+  /** Visa centre / category / subcategory for appointment search (browser flow). */
+  vfsCentre?: string;
+  vfsCategory?: string;
+  vfsSubcategory?: string;
+  /** Prefer browser flow (Puppeteer) for login and dates; use when fetch hits Cloudflare. */
+  useBrowser?: boolean;
+  /** Proxy for browser (e.g. Russian IP for Russia-only cabinet). */
+  proxy?: { server: string; username: string; password: string } | null;
+}
+
+/** Browser session held when using Puppeteer flow (not fetch). */
+export interface VfsBrowserSession {
+  page: unknown;
+  browser: unknown;
 }
 
 /**
  * VFS Global visa appointment client (visa.vfsglobal.com).
  * Different schema and procedure from AIS; login has captcha.
+ * When useBrowser or fetch fails (Cloudflare), uses full browser flow (vfsBrowserFlow).
  */
 export class VfsGlobalClient {
   locale: string;
@@ -32,6 +53,13 @@ export class VfsGlobalClient {
   captchaSolver: CaptchaSolver | null;
   captchaApiKey: string | null;
   baseUri: string;
+  vfsCentre: string;
+  vfsCategory: string;
+  vfsSubcategory: string;
+  useBrowser: boolean;
+  proxy: { server: string; username: string; password: string } | null;
+  /** Set after browser login; used by checkAvailableDate/checkAvailableTime/book. */
+  _browserSession: VfsBrowserSession | null = null;
 
   constructor(
     countryCodeOrConfig: string | VfsConfig,
@@ -47,17 +75,49 @@ export class VfsGlobalClient {
       this.password = countryCodeOrConfig.password;
       this.captchaSolver = countryCodeOrConfig.captchaSolver ?? null;
       this.captchaApiKey = countryCodeOrConfig.captchaApiKey ?? null;
+      this.vfsCentre = countryCodeOrConfig.vfsCentre ?? '';
+      this.vfsCategory = countryCodeOrConfig.vfsCategory ?? '';
+      this.vfsSubcategory = countryCodeOrConfig.vfsSubcategory ?? '';
+      this.useBrowser = countryCodeOrConfig.useBrowser === true;
+      this.proxy = countryCodeOrConfig.proxy ?? null;
     } else {
       this.locale = countryCodeOrConfig ?? 'rus/en/fra';
       this.email = email!;
       this.password = password!;
       this.captchaSolver = null;
       this.captchaApiKey = null;
+      this.vfsCentre = '';
+      this.vfsCategory = '';
+      this.vfsSubcategory = '';
+      this.useBrowser = false;
+      this.proxy = null;
     }
     this.baseUri = `${VFS_BASE_URI}/${this.locale}`.replace(/\/+/g, '/');
   }
 
+  private async _loginWithBrowser(): Promise<Record<string, string>> {
+    const solver = this.captchaSolver
+      ? (params: unknown) => this.captchaSolver!(params as Parameters<CaptchaSolver>[0])
+      : undefined;
+    const session = await vfsBrowserLogin({
+      locale: this.locale,
+      email: this.email,
+      password: this.password,
+      captchaApiKey: this.captchaApiKey ?? undefined,
+      captchaSolver: solver ?? null,
+      headless: true,
+      timeout: 60000,
+      proxy: this.proxy ?? undefined,
+    });
+    this._browserSession = session;
+    logger.info('VFS Global: Browser login successful');
+    return {};
+  }
+
   async login(): Promise<Record<string, string>> {
+    if (this.useBrowser) {
+      return this._loginWithBrowser();
+    }
     logger.info('VFS Global: Loading login page...');
     const loginUrl = `${this.baseUri}/login`;
     let res = await fetch(loginUrl, {
@@ -148,11 +208,8 @@ export class VfsGlobalClient {
       html = await res.text();
       $ = cheerio.load(html);
     } else if (isCloudflare) {
-      throw new Error(
-        'VFS Global returned a Cloudflare challenge page ("Just a moment..."). ' +
-          'No Turnstile sitekey was found; passing it usually requires a headless browser (e.g. Puppeteer). ' +
-          'Run: npm start -- test-vfs-captcha --solve'
-      );
+      logger.info('VFS Global: Cloudflare without sitekey, falling back to browser flow...');
+      return this._loginWithBrowser();
     }
 
     const form = $('form[action*="login"], form#loginForm, form').first();
@@ -262,6 +319,14 @@ export class VfsGlobalClient {
     _scheduleId: string,
     _facilityId: string | number
   ): Promise<string[]> {
+    if (this._browserSession) {
+      const params = {
+        visa_center: this.vfsCentre || 'Visa Application Centre',
+        visa_category: this.vfsCategory || 'Visit',
+        visa_sub_category: this.vfsSubcategory || 'Standard',
+      };
+      return vfsGetAvailableDatesFromPage(this._browserSession.page, params);
+    }
     const url = `${this.baseUri}/api/availability/dates`;
     try {
       const res = await fetch(url, {
@@ -293,6 +358,9 @@ export class VfsGlobalClient {
     _facilityId: string | number,
     date: string
   ): Promise<string | null> {
+    if (this._browserSession) {
+      return vfsGetAvailableTimeFromPage(this._browserSession.page, date);
+    }
     const url = `${this.baseUri}/api/availability/times`;
     try {
       const res = await fetch(`${url}?date=${date}`, {
@@ -312,11 +380,14 @@ export class VfsGlobalClient {
     _headers: Record<string, string>,
     _scheduleId: string,
     _facilityId: string | number,
-    _date: string,
-    _time: string
+    date: string,
+    time: string
   ): Promise<void> {
+    if (this._browserSession) {
+      return vfsBookFromPage(this._browserSession.page, date, time);
+    }
     throw new Error(
-      'VFS Global book() not yet implemented. Implement after mapping real VFS booking API.'
+      'VFS Global book() not yet implemented for fetch mode. Use browser flow (useBrowser or Cloudflare fallback).'
     );
   }
 

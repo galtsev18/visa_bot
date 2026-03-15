@@ -14,6 +14,7 @@ import { EnvConfigProvider } from '../adapters/EnvConfigProvider';
 import { MergedConfigProvider } from '../adapters/EnvConfigProvider';
 import { SheetsUserRepository } from '../adapters/SheetsUserRepository';
 import { TelegramNotificationAdapter } from '../adapters/TelegramNotificationAdapter';
+import { ThrottledNotificationSender } from '../adapters/ThrottledNotificationSender';
 import { DateCacheAdapter } from '../adapters/DateCacheAdapter';
 import type { DateCacheBackend } from '../adapters/DateCacheAdapter';
 import { createDateCache } from '../lib/dateCache';
@@ -66,12 +67,20 @@ export async function createMonitorContext(
   validateMultiUserConfig(config as Parameters<typeof validateMultiUserConfig>[0]);
 
   const chatId = String(config.telegramManagerChatId ?? '').trim();
-  const notifications =
+  const rawNotifications =
     options.notifications ??
     new TelegramNotificationAdapter({
       token: String(config.telegramBotToken ?? '').trim(),
       defaultChatId: chatId,
     });
+  const notifications =
+    options.notifications !== undefined
+      ? rawNotifications
+      : new ThrottledNotificationSender({
+          inner: rawNotifications,
+          cooldownMs: 5000,
+          maxCountDisplay: 99,
+        });
 
   const { users, cacheEntries } = await repo.getInitialData();
 

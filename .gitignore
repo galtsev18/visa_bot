@@ -10,6 +10,7 @@ yarn.lock
 .env
 .env.local
 .env.*.local
+deploy/.env
 
 # Google Service Account credentials
 credentials.json

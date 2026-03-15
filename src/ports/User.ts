@@ -7,6 +7,8 @@ export interface UserData {
   password: string;
   countryCode: string;
   scheduleId: string;
+  /** AIS only: facility ID (optional; overrides global config when set) */
+  facilityId?: number | null;
   currentDate: string | null;
   reactionTime: number;
   dateRanges: Array<{ from: Date; to: Date }>;
@@ -14,8 +16,17 @@ export interface UserData {
   lastChecked: Date | null;
   lastBooked: string | null;
   priority: number;
+  /** Provider: 'ais' | 'vfsglobal'; engine uses this to choose AIS or VFS */
   provider: string;
   rowIndex?: number | null;
+  /** VFS only: visa centre (dropdown text on VFS site) */
+  vfsCentre?: string;
+  /** VFS only: visa category (e.g. type of visa) */
+  vfsCategory?: string;
+  /** VFS only: visa subcategory */
+  vfsSubcategory?: string;
+  /** VFS only: login page URL from sheet (cabinet_link) */
+  cabinetLink?: string;
 }
 
 /**

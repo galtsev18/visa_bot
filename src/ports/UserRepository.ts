@@ -83,6 +83,14 @@ export interface UserRepository {
     rowIndex?: number | null
   ): Promise<void>;
 
+  /** Обновляет last_checked и priority одним запросом (оптимизация после проверки пользователя). */
+  updateUserAfterCheck(
+    email: string,
+    lastChecked: Date,
+    priority: number,
+    rowIndex?: number | null
+  ): Promise<void>;
+
   logBookingAttempt(attempt: BookingAttemptLog): Promise<void>;
 
   /** Persist cache entry (date, available, times). Used by DateCache adapter. */

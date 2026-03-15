@@ -1,5 +1,6 @@
 /**
  * Credentials for provider login.
+ * For AIS: scheduleId, facilityId are used. For VFS: vfsCentre, vfsCategory, vfsSubcategory (and countryCode as locale).
  */
 export interface VisaCredentials {
   email: string;
@@ -7,6 +8,12 @@ export interface VisaCredentials {
   countryCode: string;
   scheduleId?: string;
   facilityId?: number;
+  /** VFS only: visa centre name as shown in dropdown */
+  vfsCentre?: string;
+  /** VFS only: visa category */
+  vfsCategory?: string;
+  /** VFS only: visa subcategory */
+  vfsSubcategory?: string;
 }
 
 /**

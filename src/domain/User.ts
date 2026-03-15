@@ -12,6 +12,7 @@ export interface UserConstructorInput {
   password: string;
   countryCode: string;
   scheduleId: string;
+  facilityId?: number | null;
   currentDate: string | null;
   reactionTime: number;
   active: boolean;
@@ -21,6 +22,10 @@ export interface UserConstructorInput {
   provider: string;
   rowIndex: number | null;
   dateRanges: ParsedDateRange[];
+  vfsCentre?: string;
+  vfsCategory?: string;
+  vfsSubcategory?: string;
+  cabinetLink?: string;
 }
 
 export class User implements IUser {
@@ -28,6 +33,7 @@ export class User implements IUser {
   password: string;
   countryCode: string;
   scheduleId: string;
+  facilityId: number | null | undefined;
   currentDate: string | null;
   reactionTime: number;
   active: boolean;
@@ -37,12 +43,17 @@ export class User implements IUser {
   provider: string;
   rowIndex: number | null;
   dateRanges: ParsedDateRange[];
+  vfsCentre?: string;
+  vfsCategory?: string;
+  vfsSubcategory?: string;
+  cabinetLink?: string;
 
   constructor(data: UserConstructorInput) {
     this.email = data.email;
     this.password = data.password;
     this.countryCode = data.countryCode;
     this.scheduleId = data.scheduleId;
+    this.facilityId = data.facilityId ?? undefined;
     this.currentDate = data.currentDate;
     this.reactionTime = data.reactionTime;
     this.active = data.active;
@@ -52,6 +63,10 @@ export class User implements IUser {
     this.provider = data.provider;
     this.rowIndex = data.rowIndex;
     this.dateRanges = data.dateRanges;
+    this.vfsCentre = data.vfsCentre;
+    this.vfsCategory = data.vfsCategory;
+    this.vfsSubcategory = data.vfsSubcategory;
+    this.cabinetLink = data.cabinetLink;
   }
 
   isDateAfterReactionTime(date: Date | string): boolean {

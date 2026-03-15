@@ -56,6 +56,8 @@ export interface CheckUserWithCacheDeps {
     facilityId: number;
     aisRequestDelaySec?: number;
     aisRateLimitBackoffSec?: number;
+    vfsRequestDelaySec?: number;
+    vfsRateLimitBackoffSec?: number;
   };
   getAvailableDates: (provider: string) => string[];
   isCacheStale: (date: string, ttl: number, provider: string) => boolean;
@@ -119,4 +121,6 @@ export interface AttemptBookingDeps {
   ) => string;
   formatBookingFailure: (user: unknown, date: string, reason: string) => string;
   log: (msg: string) => void;
+  /** Опционально: вызывается при неудачной попытке записи (для статистики ошибок). */
+  onError?: (reason: string) => void;
 }

@@ -78,22 +78,24 @@ This will:
 ## Step 6: Add Users to Google Sheets
 
 1. Open your Google Spreadsheet
-2. Go to the "Users" sheet
-3. Add a row with user data:
+2. Use **two sheets** for users:
+   - **US_users** — AIS (US Visa) users. Columns: email, password, country_code, schedule_id, facility_id, current_date, reaction_time, date_ranges, active, last_checked, last_booked, priority, provider. No VFS-specific columns.
+   - **VFS users** — VFS Global users. Same base columns plus **vfs_centre**, **vfs_category**, **vfs_subcategory** (exact text from VFS dropdowns). Full column list in [SETUP.md](SETUP.md).
+3. Add one row per user in the matching sheet. The bot loads both sheets and merges the list.
 
-| email | password | country_code | schedule_id | current_date | reaction_time | date_ranges | active |
-|-------|----------|--------------|-------------|--------------|---------------|-------------|--------|
-| user@example.com | password123 | kz | 12345 | 2024-08-15 | 7 | [{"from":"2024-06-01","to":"2024-06-15"}] | TRUE |
+**Example (AIS — in sheet US_users):**
+
+| email | password | country_code | schedule_id | facility_id | current_date | reaction_time | date_ranges | active | provider |
+|-------|----------|--------------|-------------|-------------|--------------|---------------|-------------|--------|----------|
+| user@example.com | password123 | kz | 12345 | 134 | 2024-08-15 | 7 | [{"from":"2024-06-01","to":"2024-06-15"}] | TRUE | ais |
 
 **Important fields:**
-- `email`: Login email for ais.usvisa-info.com
-- `password`: Login password
-- `country_code`: Country code (e.g., "kz", "br")
-- `schedule_id`: From the visa appointment system
-- `current_date`: Current appointment date (YYYY-MM-DD)
-- `reaction_time`: Minimum days from today (integer, e.g., 7)
-- `date_ranges`: JSON array of acceptable dates (digital format recommended)
-- `active`: Set to `TRUE` to enable monitoring
+- `email`, `password`: Login for the appointment site
+- `country_code`: AIS: e.g. kz, br. VFS: locale path (e.g. rus/en/fra)
+- `schedule_id`: Required for AIS; can be empty for VFS
+- `current_date`, `reaction_time`, `date_ranges`, `active`: Same for both
+- `provider`: **ais** or **vfs** (sheet choice also defines provider)
+- VFS users go in **VFS users** sheet with **vfs_centre**, **vfs_category**, **vfs_subcategory**
 
 **Date Ranges Example:**
 ```json
@@ -144,7 +146,7 @@ npm start -- --help
 ### No users found
 - Check `active` column is set to `TRUE` (not `true` or `True`)
 - Verify user data format is correct
-- Check sheet name is exactly "Users"
+- Use sheet **US_users** for AIS users and **VFS users** for VFS users (names exact)
 
 ### Date parsing errors
 - Use digital format: `"2024-06-01"` not `"June 1, 2024"`

@@ -4,6 +4,8 @@ import { logger } from '../lib/logger';
 import { isSocketHangupError, formatErrorForLog } from '../lib/utils';
 
 const COOLDOWN = 3600; // 1 hour in seconds
+/** Minimum interval between "quota exceeded" Telegram messages (ms). */
+const QUOTA_EXCEEDED_DEBOUNCE_MS = 10 * 60 * 1000; // 10 minutes
 
 export interface MonitorCommandOptions {
   refreshInterval?: string | number;
@@ -20,7 +22,13 @@ export async function monitorCommand(options: MonitorCommandOptions = {}): Promi
     const { config, users, cacheEntries, repo, dateCache, notifications } = ctx;
     const managerDeps = { repo, dateCache, notifications };
 
+    let lastQuotaExceededSent = 0;
     repo.setQuotaNotifier?.((event: 'exceeded' | 'resolved') => {
+      if (event === 'exceeded') {
+        const now = Date.now();
+        if (now - lastQuotaExceededSent < QUOTA_EXCEEDED_DEBOUNCE_MS) return;
+        lastQuotaExceededSent = now;
+      }
       const msg =
         event === 'exceeded'
           ? '⚠️ <b>Google Sheets quota exceeded</b>. Retrying in ~1 min…'

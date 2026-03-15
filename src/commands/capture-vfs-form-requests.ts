@@ -1,0 +1,97 @@
+/**
+ * Log in to VFS via Puppeteer (with 2Captcha for captcha), then click "Start New Booking",
+ * select centre/category/subcategory from the credentials file, and capture all XHR/fetch
+ * requests (URL, method, postData). Writes .tmp/vfs-captured-requests.json.
+ *
+ * Requires: run get-vfs-login-credentials first; CAPTCHA_2CAPTCHA_API_KEY in .env for
+ * automatic captcha, or run with --visible to solve captcha manually.
+ */
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { getConfig } from '../lib/config';
+import { resolveVfsProxy } from '../lib/geonixProxy';
+import { localeFromLoginUrl } from '../lib/vfsUtils';
+import { vfsBrowserLogin, vfsGetAvailableDatesFromPage } from '../lib/providers/vfsBrowserFlow';
+import { logger } from '../lib/logger';
+
+const OUT_DIR = '.tmp';
+const OUT_FILE = 'vfs-captured-requests.json';
+const CREDS_FILE = 'vfs-login.json';
+
+interface CapturedRequest {
+  url: string;
+  method: string;
+  postData?: string;
+  timestamp: number;
+}
+
+export async function captureVfsFormRequestsCommand(options: {
+  visible?: boolean;
+}): Promise<void> {
+  const config = getConfig();
+  const credsPath = join(process.cwd(), OUT_DIR, CREDS_FILE);
+  let creds: {
+    email: string;
+    password: string;
+    loginUrl: string;
+    vfs_centre?: string;
+    vfs_category?: string;
+    vfs_sub_category?: string;
+  };
+  try {
+    creds = JSON.parse(await readFile(credsPath, 'utf8'));
+  } catch {
+    throw new Error(`Run 'npm start -- get-vfs-login-credentials' first to create ${credsPath}`);
+  }
+  const locale = localeFromLoginUrl(creds.loginUrl);
+  const proxy = await resolveVfsProxy({
+    vfsProxyUrl: config.vfsProxyUrl ?? null,
+    geonixApiKey: config.geonixApiKey ?? null,
+    vfsProxyCountry: config.vfsProxyCountry ?? null,
+  });
+  if (proxy) logger.info(`Using VFS proxy: ${proxy.server}`);
+  const captured: CapturedRequest[] = [];
+  const session = await vfsBrowserLogin({
+    locale,
+    email: creds.email,
+    password: creds.password,
+    captchaApiKey: config.captcha2CaptchaApiKey ?? undefined,
+    headless: !options.visible,
+    timeout: 90000,
+    formTimeout: 45000,
+    proxy: proxy ?? undefined,
+  });
+  const page = session.page as {
+    on: (ev: string, fn: (req: { url: () => string; method: () => string; postData: () => string | undefined; resourceType?: () => string }) => void) => void;
+  };
+  page.on('request', (req) => {
+    const rt = req.resourceType?.();
+    if (rt === 'xhr' || rt === 'fetch') {
+      captured.push({
+        url: req.url(),
+        method: req.method(),
+        postData: req.postData() ?? undefined,
+        timestamp: Date.now(),
+      });
+    }
+  });
+  const params = {
+    visa_center: creds.vfs_centre || 'Visa Application Centre',
+    visa_category: creds.vfs_category || 'Visit',
+    visa_sub_category: creds.vfs_sub_category || 'Standard',
+  };
+  logger.info('Running Start New Booking and selecting options to capture requests...');
+  await vfsGetAvailableDatesFromPage(session.page, params);
+  const browser = session.browser as { close: () => Promise<void> };
+  await browser.close();
+  const outPath = join(process.cwd(), OUT_DIR, OUT_FILE);
+  await mkdir(join(process.cwd(), OUT_DIR), { recursive: true });
+  await writeFile(outPath, JSON.stringify(captured, null, 2), 'utf8');
+  logger.info(`Captured ${captured.length} requests to ${outPath}`);
+  if (captured.length > 0) {
+    captured.forEach((r, i) => {
+      logger.info(`[${i + 1}] ${r.method} ${r.url}`);
+      if (r.postData) logger.info(`    body: ${r.postData.slice(0, 200)}${r.postData.length > 200 ? '...' : ''}`);
+    });
+  }
+}

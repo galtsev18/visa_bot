@@ -7,17 +7,29 @@ import {
   formatSlotFound,
   formatBookingFailure,
   formatMonitorStarted,
+  formatDailyStatsReport,
 } from './telegram';
 import { logger } from './logger';
 import { sleep, formatErrorForLog } from './utils';
 import { checkUserWithCache as checkUserWithCacheUseCase } from '../application/checkUserWithCache';
 import { attemptBooking as attemptBookingUseCase } from '../application/attemptBooking';
 import { startMonitor as startMonitorUseCase } from '../application/startMonitor';
-import { startMetrics, incrementChecks, incrementBookings } from './metrics';
+import {
+  startMetrics,
+  incrementChecks,
+  incrementBookings,
+  incrementSlotsMissed,
+  recordError,
+  getMetrics,
+  shouldSendDailyReport,
+  markDailyReportSent,
+} from './metrics';
 import type { UserRepository } from '../ports/UserRepository';
 import type { DateCache } from '../ports/DateCache';
 import type { NotificationSender } from '../ports/NotificationSender';
 import type { User } from '../ports/User';
+import { resolveVfsProxy } from './geonixProxy';
+import { localeFromLoginUrl } from './vfsUtils';
 
 export interface ManagerDeps {
   repo: UserRepository;
@@ -37,6 +49,11 @@ export interface AppConfigLike {
   captchaSolver?: ((params: unknown) => Promise<string>) | null;
   aisRequestDelaySec?: number;
   aisRateLimitBackoffSec?: number;
+  vfsRequestDelaySec?: number;
+  vfsRateLimitBackoffSec?: number;
+  geonixApiKey?: string | null;
+  vfsProxyCountry?: string | null;
+  vfsProxyUrl?: string | null;
 }
 
 export class UserBotManager {
@@ -69,14 +86,27 @@ export class UserBotManager {
 
     logger.info(`Initializing ${users.length} users...`);
 
+    const hasVfs = users.some((u) => (u.provider || '').toLowerCase() === 'vfsglobal');
+    const vfsProxy = hasVfs
+      ? await resolveVfsProxy({
+          vfsProxyUrl: this.config.vfsProxyUrl ?? null,
+          geonixApiKey: this.config.geonixApiKey ?? null,
+          vfsProxyCountry: this.config.vfsProxyCountry ?? null,
+        })
+      : null;
+    if (hasVfs && vfsProxy) {
+      logger.info(`VFS proxy resolved: ${vfsProxy.server}`);
+    }
+
     for (const user of users) {
       try {
+        const facilityId = user.facilityId ?? this.config.facilityId ?? 134;
         const botConfig = {
           email: user.email,
           password: user.password,
           countryCode: user.countryCode,
           scheduleId: user.scheduleId,
-          facilityId: this.config.facilityId ?? 134,
+          facilityId,
           refreshDelay: this.config.refreshInterval,
           provider: user.provider ?? 'ais',
           captchaSolver: this.config.captchaSolver ?? null,
@@ -86,13 +116,21 @@ export class UserBotManager {
         const provider = createVisaProvider(botConfig.provider, {
           captcha2CaptchaApiKey: this.config.captcha2CaptchaApiKey ?? null,
           captchaSolver: this.config.captchaSolver ?? null,
+          vfsProxy: vfsProxy ?? undefined,
         });
+        const effectiveCountryCode =
+          (user.provider || '').toLowerCase() === 'vfsglobal'
+            ? (user.countryCode?.trim() || localeFromLoginUrl(user.cabinetLink || '') || 'rus/en/fra')
+            : user.countryCode;
         const client = new ProviderBackedClient(provider, {
           email: user.email,
           password: user.password,
-          countryCode: user.countryCode,
+          countryCode: effectiveCountryCode,
           scheduleId: user.scheduleId,
-          facilityId: this.config.facilityId ?? 134,
+          facilityId,
+          vfsCentre: user.vfsCentre,
+          vfsCategory: user.vfsCategory,
+          vfsSubcategory: user.vfsSubcategory,
         });
 
         const bot = new Bot(botConfig, { client });
@@ -115,7 +153,11 @@ export class UserBotManager {
     return checkUserWithCacheUseCase(user, {
       bot: this.bots.get(user.email) ?? null,
       sessionHeaders: this.sessions.get(user.email) ?? null,
-      config: { ...this.config, cacheTtl: this.config.cacheTtl ?? 60, facilityId: this.config.facilityId ?? 134 },
+      config: {
+        ...this.config,
+        cacheTtl: this.config.cacheTtl ?? 60,
+        facilityId: user.facilityId ?? this.config.facilityId ?? 134,
+      },
       getAvailableDates: (p) => dc.getAvailableDates(p),
       isCacheStale: (date, ttl, p) => dc.isCacheStale(date, ttl, p),
       refreshAllDates: (client, headers, scheduleId, facilityId, ttl, p, opts) =>
@@ -145,6 +187,7 @@ export class UserBotManager {
       formatBookingSuccessWithDetails: (u, o, n, t) => formatBookingSuccessWithDetails(u as import('./telegram').UserLike, o, n, t ?? null),
       formatBookingFailure: (u, d, r) => formatBookingFailure(u as import('./telegram').UserLike, d, r),
       log: (msg) => logger.info(msg),
+      onError: (reason) => recordError(reason),
     });
   }
 
@@ -163,6 +206,25 @@ export class UserBotManager {
     const dc = this.deps.dateCache;
     const notif = this.deps.notifications;
     const chatId = String(this.config.telegramManagerChatId ?? '');
+
+    // Ежедневный отчёт в 10:00 (local time)
+    const now = new Date();
+    if (now.getHours() === 10 && now.getMinutes() < 5 && shouldSendDailyReport()) {
+      try {
+        const m = getMetrics();
+        const report = formatDailyStatsReport({
+          activeUsersCount: this.users.length,
+          dailySlotsMissed: m.dailySlotsMissed ?? 0,
+          dailyBookings: m.dailyBookings ?? 0,
+          dailyErrorCounts: m.dailyErrorCounts ?? {},
+        });
+        await notif.send(report, chatId);
+        markDailyReportSent();
+        logger.info('Daily stats report sent');
+      } catch (err) {
+        logger.error(`Failed to send daily report: ${formatErrorForLog(err)}`);
+      }
+    }
 
     if (!this._monitorStarted) {
       await startMonitorUseCase(initialCacheEntries, {
@@ -215,7 +277,11 @@ export class UserBotManager {
       const slotFoundMsg = formatSlotFound(user, availableDate);
       await notif.send(slotFoundMsg, chatId);
       const booked = await this.attemptBooking(user, availableDate);
-      if (booked) incrementBookings();
+      if (booked) {
+        incrementBookings();
+      } else {
+        incrementSlotsMissed();
+      }
     } else {
       await repo.logBookingAttempt({
         user_email: user.email,
@@ -227,10 +293,12 @@ export class UserBotManager {
 
     const checkedAt = new Date();
     updateUserPriority(user, checkedAt);
-    await Promise.all([
-      repo.updateUserLastChecked(user.email, checkedAt, user.rowIndex ?? undefined),
-      repo.updateUserPriority(user.email, user.priority, user.rowIndex ?? undefined),
-    ]);
+    await repo.updateUserAfterCheck(
+      user.email,
+      checkedAt,
+      user.priority,
+      user.rowIndex ?? undefined
+    );
   }
 
   async monitorWithRotation(initialCacheEntries?: Array<{ provider?: string; date: string }>): Promise<never> {
@@ -241,7 +309,9 @@ export class UserBotManager {
         await this.runOneCycle(initialCacheEntries);
         await sleep(this.config.refreshInterval ?? 3);
       } catch (error) {
-        logger.error(`Error in monitoring loop: ${formatErrorForLog(error)}`);
+        const errMsg = formatErrorForLog(error);
+        logger.error(`Error in monitoring loop: ${errMsg}`);
+        recordError(errMsg);
         await sleep(this.config.refreshInterval ?? 3);
       }
     }

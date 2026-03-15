@@ -189,3 +189,34 @@ export function formatMonitorStarted(
 <b>Time:</b> ${new Date().toLocaleString()}
   `.trim();
 }
+
+export interface DailyStatsForReport {
+  activeUsersCount: number;
+  dailySlotsMissed: number;
+  dailyBookings: number;
+  dailyErrorCounts: Record<string, number>;
+}
+
+/**
+ * Формат ежедневного отчёта (10:00): активные пользователи, слоты не записались / записались, ошибки.
+ */
+export function formatDailyStatsReport(stats: DailyStatsForReport): string {
+  const errors =
+    Object.keys(stats.dailyErrorCounts).length === 0
+      ? 'Нет'
+      : Object.entries(stats.dailyErrorCounts)
+          .map(([msg, count]) => `• ${count}× ${msg.slice(0, 80)}${msg.length > 80 ? '…' : ''}`)
+          .join('\n');
+  return `
+<b>📊 Статистика за сутки</b>
+
+<b>Активных пользователей:</b> ${stats.activeUsersCount}
+<b>Подходящих слотов, на которые не успели записаться:</b> ${stats.dailySlotsMissed}
+<b>Успешно записались:</b> ${stats.dailyBookings}
+
+<b>Ошибки (агрегировано):</b>
+${errors}
+
+<b>Время отчёта:</b> ${new Date().toLocaleString()}
+  `.trim();
+}

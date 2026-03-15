@@ -45,6 +45,8 @@ export function createFallbackAdapters(options?: {
       sheets.updateUserLastBooked(email, date, timeSlot ?? null, rowIndex ?? undefined),
     updateUserPriority: (email, priority, rowIndex) =>
       sheets.updateUserPriority(email, priority, rowIndex ?? undefined),
+    updateUserAfterCheck: (email, lastChecked, priority, rowIndex) =>
+      sheets.updateUserAfterCheck(email, lastChecked, priority, rowIndex ?? undefined),
     logBookingAttempt: (attempt) => sheets.logBookingAttempt(attempt as import('./sheets').BookingAttemptLog),
     updateAvailableDate: (date, available, times, facilityId) =>
       sheets.updateAvailableDate(date, available, times ?? [], facilityId),

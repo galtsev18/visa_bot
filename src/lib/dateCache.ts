@@ -1,7 +1,7 @@
 import type { DateCacheClient } from '../ports/DateCache';
 import type { RefreshDatesOptions } from '../ports/DateCache';
 import { logger } from './logger';
-import { sleep, isSocketHangupError, formatErrorForLog } from './utils';
+import { sleep, isSocketHangupError, formatErrorForLog, getProgressiveDelaySeconds } from './utils';
 import { readAvailableDatesCache, updateAvailableDate } from './sheets';
 
 interface CacheEntry {
@@ -141,6 +141,9 @@ export function getCacheStats(): {
   return { total: cache.size, providers };
 }
 
+const PORTAL_RATE_LIMIT_MAX_RETRIES = 3;
+const PORTAL_RATE_LIMIT_MAX_SEC = 120;
+
 export async function refreshDate(
   date: string,
   client: DateCacheClient,
@@ -151,37 +154,39 @@ export async function refreshDate(
   provider = 'ais',
   options: { rateLimitBackoffSec?: number } = {}
 ): Promise<{ available: boolean; times: string[] }> {
-  const rateLimitBackoffSec = options.rateLimitBackoffSec ?? 30;
+  const baseBackoffSec = options.rateLimitBackoffSec ?? 30;
 
-  const tryFetch = async () => {
+  const tryFetch = async (): Promise<{ available: boolean; times: string[] }> => {
     const time = await client.checkAvailableTime(headers, scheduleId, facilityId, date);
     const available = time !== null && time !== undefined;
     const times = available ? [time as string] : [];
     updateDate(date, available, times, ttl, provider);
-    logger.info(`Refreshed cache for date ${date}: available=${available}`);
+    logger.debug(`Refreshed cache for date ${date}: available=${available}`);
     return { available, times };
   };
 
-  try {
-    return await tryFetch();
-  } catch (error: unknown) {
-    if (isSocketHangupError(error)) {
-      logger.info(
-        `Rate limit / socket hang up for date ${date}, backing off ${rateLimitBackoffSec}s before retry...`
-      );
-      await sleep(rateLimitBackoffSec);
-      try {
-        return await tryFetch();
-      } catch (retryErr: unknown) {
-        logger.error(`Failed to refresh date ${date} (after retry): ${formatErrorForLog(retryErr)}`);
+  for (let attempt = 0; attempt <= PORTAL_RATE_LIMIT_MAX_RETRIES; attempt++) {
+    try {
+      return await tryFetch();
+    } catch (error: unknown) {
+      if (!isSocketHangupError(error) || attempt === PORTAL_RATE_LIMIT_MAX_RETRIES) {
+        logger.error(`Failed to refresh date ${date}${attempt > 0 ? ` (after ${attempt} retries)` : ''}: ${formatErrorForLog(error)}`);
         updateDate(date, false, [], ttl, provider);
         return { available: false, times: [] };
       }
+      const waitSec = getProgressiveDelaySeconds(
+        attempt,
+        baseBackoffSec,
+        PORTAL_RATE_LIMIT_MAX_SEC
+      );
+      logger.info(
+        `Rate limit / socket hang up for date ${date}. Progressive backoff: waiting ${waitSec}s before retry (${attempt + 1}/${PORTAL_RATE_LIMIT_MAX_RETRIES})...`
+      );
+      await sleep(waitSec);
     }
-    logger.error(`Failed to refresh date ${date}: ${formatErrorForLog(error)}`);
-    updateDate(date, false, [], ttl, provider);
-    return { available: false, times: [] };
   }
+  updateDate(date, false, [], ttl, provider);
+  return { available: false, times: [] };
 }
 
 const HEARTBEAT_INTERVAL_MS = 30 * 1000;
@@ -198,9 +203,10 @@ export async function refreshAllDates(
 ): Promise<string[]> {
   const requestDelaySec = options.requestDelaySec ?? 2;
   const rateLimitBackoffSec = options.rateLimitBackoffSec ?? 30;
+  const isVfs = (provider || 'ais').toLowerCase() === 'vfsglobal';
 
   try {
-    logger.info('Fetching list of available dates from API...');
+    logger.info(isVfs ? 'Fetching VFS available dates (browser flow)...' : 'Fetching list of available dates from API...');
     const heartbeatTimer = setInterval(() => {
       logger.info('Still fetching available dates from API...');
     }, HEARTBEAT_INTERVAL_MS);
@@ -214,6 +220,15 @@ export async function refreshAllDates(
       logger.info('No dates available from API');
       return [];
     }
+
+    if (isVfs) {
+      for (const date of dates) {
+        updateDate(date, true, [], ttl, provider);
+      }
+      logger.info(`Refreshed VFS cache: ${dates.length} dates available`);
+      return dates;
+    }
+
     logger.info(
       `Received ${dates.length} dates. Checking availability (delay ${requestDelaySec}s between requests)...`
     );
@@ -373,33 +388,35 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
     provider = 'ais',
     opts: RefreshDatesOptions = {}
   ): Promise<{ available: boolean; times: string[] }> {
-    const rateLimitBackoffSec = opts.rateLimitBackoffSec ?? 30;
-    const tryFetch = async () => {
+    const baseBackoffSec = opts.rateLimitBackoffSec ?? 30;
+    const tryFetch = async (): Promise<{ available: boolean; times: string[] }> => {
       const time = await client.checkAvailableTime(headers, scheduleId, facilityId, date);
       const available = time !== null && time !== undefined;
       const times = available ? [time as string] : [];
       update(date, available, times, ttl, provider);
-      logger.info(`Refreshed cache for date ${date}: available=${available}`);
+      logger.debug(`Refreshed cache for date ${date}: available=${available}`);
       return { available, times };
     };
-    try {
-      return await tryFetch();
-    } catch (error: unknown) {
-      if (isSocketHangupError(error)) {
-        logger.info(`Rate limit / socket hang up for date ${date}, backing off ${rateLimitBackoffSec}s before retry...`);
-        await sleep(rateLimitBackoffSec);
-        try {
-          return await tryFetch();
-        } catch (retryErr: unknown) {
-          logger.error(`Failed to refresh date ${date} (after retry): ${formatErrorForLog(retryErr)}`);
+    for (let attempt = 0; attempt <= PORTAL_RATE_LIMIT_MAX_RETRIES; attempt++) {
+      try {
+        return await tryFetch();
+      } catch (error: unknown) {
+        if (!isSocketHangupError(error) || attempt === PORTAL_RATE_LIMIT_MAX_RETRIES) {
+          logger.error(
+            `Failed to refresh date ${date}${attempt > 0 ? ` (after ${attempt} retries)` : ''}: ${formatErrorForLog(error)}`
+          );
           update(date, false, [], ttl, provider);
           return { available: false, times: [] };
         }
+        const waitSec = getProgressiveDelaySeconds(attempt, baseBackoffSec, PORTAL_RATE_LIMIT_MAX_SEC);
+        logger.info(
+          `Rate limit / socket hang up for date ${date}. Progressive backoff: waiting ${waitSec}s (${attempt + 1}/${PORTAL_RATE_LIMIT_MAX_RETRIES})...`
+        );
+        await sleep(waitSec);
       }
-      logger.error(`Failed to refresh date ${date}: ${formatErrorForLog(error)}`);
-      update(date, false, [], ttl, provider);
-      return { available: false, times: [] };
     }
+    update(date, false, [], ttl, provider);
+    return { available: false, times: [] };
   }
 
   async function refreshAll(
@@ -413,8 +430,9 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
   ): Promise<string[]> {
     const requestDelaySec = opts.requestDelaySec ?? 2;
     const rateLimitBackoffSec = opts.rateLimitBackoffSec ?? 30;
+    const isVfs = (provider || 'ais').toLowerCase() === 'vfsglobal';
     try {
-      logger.info('Fetching list of available dates from API...');
+      logger.info(isVfs ? 'Fetching VFS available dates (browser flow)...' : 'Fetching list of available dates from API...');
       const heartbeatTimer = setInterval(
         () => logger.info('Still fetching available dates from API...'),
         HEARTBEAT_INTERVAL_MS
@@ -428,6 +446,13 @@ export function createDateCache(options: CreateDateCacheOptions = {}): DateCache
       if (!dates || dates.length === 0) {
         logger.info('No dates available from API');
         return [];
+      }
+      if (isVfs) {
+        for (const date of dates) {
+          update(date, true, [], ttl, provider);
+        }
+        logger.info(`Refreshed VFS cache: ${dates.length} dates available`);
+        return dates;
       }
       logger.info(`Received ${dates.length} dates. Checking availability (delay ${requestDelaySec}s between requests)...`);
       const availableDates: string[] = [];

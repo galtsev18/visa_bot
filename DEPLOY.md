@@ -45,11 +45,23 @@ mkdir -p /opt/us-visa-bot
 From your **local machine** (PowerShell or Git Bash, in the project folder):
 
 ```bash
-scp -r src package.json package-lock.json tsconfig.json deploy .env.example root@YOUR_SERVER_IP:/opt/us-visa-bot/
+scp -r src package.json package-lock.json tsconfig.json deploy root@YOUR_SERVER_IP:/opt/us-visa-bot/
 scp credentials.json root@YOUR_SERVER_IP:/opt/us-visa-bot/
 ```
 
-Copy `.env` too if you have it, or create it on the server later.
+Copy `.env` to the server (same keys as locally; file `deploy/.env` is a copy for the server and is in `.gitignore`):
+
+```bash
+scp deploy/.env root@YOUR_SERVER_IP:/opt/us-visa-bot/.env
+```
+
+**Or** from PowerShell, merge your keys into the existing server `.env` without overwriting the rest (run from a machine that can SSH to the server):
+
+```powershell
+.\deploy\sync-env-to-server.ps1 root@YOUR_SERVER_IP
+```
+
+If you don't use `deploy/.env`, copy your project root `.env` instead, or create `.env` on the server from `.env.example` and fill it in.
 
 ### 2.3 On the server: install dependencies and configure
 
@@ -72,6 +84,12 @@ nano .env
 
 Set at least `GOOGLE_SHEETS_ID` and `GOOGLE_CREDENTIALS_PATH`. Save (Ctrl+O, Enter, Ctrl+X).  
 Ensure `credentials.json` is in `/opt/us-visa-bot/`. Other settings can stay in the Google Sheet “Settings” tab.
+
+**If you use VFS with proxy (Geonix):** add the same variables as in your local `.env`:
+- `GEONIX_API_KEY` — your Geonix API key (from https://geonix.com/personal/api/)
+- `VFS_PROXY_COUNTRY=Russia` (or the country of your VFS cabinet)
+
+Either copy your local `.env` to the server with `scp` (so the key is already there) or add these lines in `nano .env` on the server.
 
 ### 2.4 Install the systemd service and start the bot
 

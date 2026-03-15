@@ -34,11 +34,32 @@ Create three sheets with these exact names:
 - **Available Dates Cache** - For caching available dates
 - **Booking Attempts Log** - For logging booking attempts
 
-The bot will automatically create headers when it runs, but you can also create them manually:
+The bot will automatically create headers when it runs (for a new empty sheet). For an existing sheet, add any missing columns manually. The **provider** column determines which system is used: **ais** (AIS US Visa) or **vfsglobal** (VFS Global). All parameters that vary per user are stored in this table.
 
-**Users Sheet Headers:**
+**Users sheet – full column list**
+
+| Column | Used by | Description |
+|--------|---------|-------------|
+| email | both | Login email (AIS or VFS site) |
+| password | both | Login password |
+| country_code | both | **AIS:** country code (e.g. kz, br). **VFS:** locale path (e.g. rus/en/fra) |
+| schedule_id | AIS | Schedule ID from AIS |
+| facility_id | AIS | (Optional) Facility ID; overrides global config when set |
+| current_date | both | Current booked appointment date (YYYY-MM-DD) |
+| reaction_time | both | Min days from today before accepting a slot (integer) |
+| date_ranges | both | JSON array of acceptable date ranges |
+| active | both | TRUE = monitor this user, FALSE = skip |
+| last_checked | both | (Filled by bot) Last check timestamp |
+| last_booked | both | (Filled by bot) Last successful booking date |
+| priority | both | (Filled by bot) Rotation priority |
+| provider | both | **ais** or **vfsglobal** – engine chooses AIS or VFS by this |
+| vfs_centre | VFS | Visa centre name as in VFS dropdown (e.g. city/centre) |
+| vfs_category | VFS | Visa category (e.g. type of visa) |
+| vfs_subcategory | VFS | Visa subcategory |
+
+**Users Sheet Headers (copy-paste for new sheet):**
 ```
-email | password | country_code | schedule_id | current_date | reaction_time | date_ranges | active | last_checked | last_booked | priority
+email | password | country_code | schedule_id | facility_id | current_date | reaction_time | date_ranges | active | last_checked | last_booked | priority | provider | vfs_centre | vfs_category | vfs_subcategory
 ```
 
 **Available Dates Cache Sheet Headers:**
@@ -128,21 +149,26 @@ ROTATION_COOLDOWN=30
 
 ### 5. Add Users to Google Sheets
 
-In the **Users** sheet, add rows for each user:
+In the **Users** sheet, add one row per user. Set **provider** to `ais` or `vfsglobal`; the engine uses that to choose the system. Fill only the fields that apply to the chosen provider.
 
-| email | password | country_code | schedule_id | current_date | reaction_time | date_ranges | active |
-|--------|----------|-------------|--------------|--------------|---------------|--------------|-----------|
-| user@example.com | password123 | kz | 12345 | 2024-08-15 | 7 | [{"from":"2024-06-01","to":"2024-06-15"}] | TRUE |
+**Example – AIS user:**
+| email | password | country_code | schedule_id | facility_id | current_date | reaction_time | date_ranges | active | provider |
+|--------|----------|-------------|--------------|-------------|--------------|---------------|--------------|--------|----------|
+| user@example.com | *** | kz | 12345 | 134 | 2024-08-15 | 7 | [{"from":"2024-06-01","to":"2024-06-15"}] | TRUE | ais |
 
-**Field Descriptions:**
-- `email`: User's login email for ais.usvisa-info.com
-- `password`: User's password
-- `country_code`: Country code (e.g., "kz", "br", "fr")
-- `schedule_id`: Schedule ID from the visa appointment system
-- `current_date`: Current booked appointment date (YYYY-MM-DD)
-- `reaction_time`: Minimum days from today before booking (integer)
-- `date_ranges`: JSON array of acceptable date ranges (human-readable)
-- `active`: TRUE to enable monitoring, FALSE to disable
+**Example – VFS user:**
+| email | password | country_code | schedule_id | current_date | reaction_time | date_ranges | active | provider | vfs_centre | vfs_category | vfs_subcategory |
+|--------|----------|-------------|-------------|--------------|---------------|--------------|--------|----------|------------|--------------|-----------------|
+| vfs@example.com | *** | rus/en/fra | (any) | 2024-08-15 | 7 | [{"from":"2024-06-01","to":"2024-06-15"}] | TRUE | vfsglobal | Visa Application Centre | Visit | Standard |
+
+**Field descriptions (summary):**
+- `email`, `password`: Login for the site (AIS or VFS)
+- `country_code`: **AIS** – e.g. kz, br. **VFS** – locale path, e.g. rus/en/fra
+- `schedule_id`: **AIS** – required. **VFS** – can be empty or placeholder
+- `facility_id`: **AIS** only, optional; overrides global facility when set
+- `current_date`, `reaction_time`, `date_ranges`, `active`: Same for both
+- `provider`: **ais** or **vfsglobal** – determines which system is used
+- `vfs_centre`, `vfs_category`, `vfs_subcategory`: **VFS** only – exact text as on VFS dropdowns (which visa/centre)
 
 **Date Ranges Format (Digital format recommended):**
 ```json

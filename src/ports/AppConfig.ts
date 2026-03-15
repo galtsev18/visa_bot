@@ -22,11 +22,20 @@ export interface AppConfig {
   cacheTtl: number;
   rotationCooldown: number;
 
-  // AIS rate limiting
+  // AIS rate limiting (per-provider timings)
   aisRequestDelaySec: number;
   aisRateLimitBackoffSec: number;
+
+  // VFS rate limiting / timeouts (used when provider === vfsglobal)
+  vfsRequestDelaySec: number;
+  vfsRateLimitBackoffSec: number;
 
   // Optional: 2Captcha for VFS
   captcha2CaptchaApiKey?: string | null;
   captchaSolver?: ((params: unknown) => Promise<string>) | null;
+
+  // VFS proxy (cabinet often only from country IP, e.g. Russia; Geonix: https://geonix.com)
+  geonixApiKey?: string | null;
+  vfsProxyCountry?: string | null;
+  vfsProxyUrl?: string | null;
 }

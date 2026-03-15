@@ -88,6 +88,15 @@ export class SheetsUserRepository implements UserRepository {
     await sheets.updateUserPriority(email, priority, rowIndex);
   }
 
+  async updateUserAfterCheck(
+    email: string,
+    lastChecked: Date,
+    priority: number,
+    rowIndex?: number | null
+  ): Promise<void> {
+    await sheets.updateUserAfterCheck(email, lastChecked, priority, rowIndex);
+  }
+
   async logBookingAttempt(attempt: BookingAttemptLog): Promise<void> {
     await sheets.logBookingAttempt(attempt as Parameters<typeof sheets.logBookingAttempt>[0]);
   }

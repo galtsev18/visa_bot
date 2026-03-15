@@ -26,6 +26,7 @@ function createSpyRepo(record: RecordedCall[]): UserRepository {
     updateUserCurrentDate: async (...args) => recordCall('updateUserCurrentDate', ...args),
     updateUserLastBooked: async (...args) => recordCall('updateUserLastBooked', ...args),
     updateUserPriority: async (...args) => recordCall('updateUserPriority', ...args),
+    updateUserAfterCheck: async () => {},
     logBookingAttempt: async (attempt) => recordCall('logBookingAttempt', attempt),
     updateAvailableDate: async () => {},
   };

@@ -28,6 +28,7 @@ export async function attemptBooking(
     if (!bot) parts.push('bot not initialized');
     if (!sessionHeaders) parts.push('session not initialized (not logged in)');
     const reason = `Cannot book: ${parts.join(', ')} for ${user.email} (login may have failed at startup)`;
+    deps.onError?.(reason);
     await logBookingAttempt({
       user_email: user.email,
       date_attempted: date,
@@ -73,6 +74,7 @@ export async function attemptBooking(
       return true;
     }
 
+    deps.onError?.('Booking failed - no time slot available');
     await logBookingAttempt({
       user_email: user.email,
       date_attempted: date,
@@ -88,6 +90,7 @@ export async function attemptBooking(
     return false;
   } catch (error) {
     const errMsg = formatErrorForLog(error);
+    deps.onError?.(errMsg);
     log(`Booking failed for ${user.email} on ${date}: ${errMsg}`);
 
     await logBookingAttempt({

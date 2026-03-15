@@ -19,8 +19,16 @@ export interface EnvConfig {
   rotationCooldown: number;
   aisRequestDelaySec: number;
   aisRateLimitBackoffSec: number;
+  vfsRequestDelaySec: number;
+  vfsRateLimitBackoffSec: number;
   captcha2CaptchaApiKey?: string | null;
   captchaSolver?: null;
+  /** Geonix API key for fetching proxies (VFS cabinet from country-specific IP, e.g. Russia) */
+  geonixApiKey?: string | null;
+  /** Country for VFS proxy when using Geonix (e.g. Russia). Ignored if vfsProxyUrl is set. */
+  vfsProxyCountry?: string | null;
+  /** Manual proxy URL for VFS (e.g. http://user:pass@host:port). Overrides Geonix when set. */
+  vfsProxyUrl?: string | null;
 }
 
 export function getConfig(): EnvConfig {
@@ -35,14 +43,19 @@ export function getConfig(): EnvConfig {
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
     telegramManagerChatId: process.env.TELEGRAM_MANAGER_CHAT_ID,
     facilityId: Number(process.env.FACILITY_ID || 134),
-    refreshInterval: Number(process.env.REFRESH_INTERVAL || 3),
-    sheetsRefreshInterval: Number(process.env.SHEETS_REFRESH_INTERVAL || 300),
-    cacheTtl: Number(process.env.CACHE_TTL || 60),
-    rotationCooldown: Number(process.env.ROTATION_COOLDOWN || 30),
+    refreshInterval: Number(process.env.REFRESH_INTERVAL || 5),
+    sheetsRefreshInterval: Number(process.env.SHEETS_REFRESH_INTERVAL || 400),
+    cacheTtl: Number(process.env.CACHE_TTL || 90),
+    rotationCooldown: Number(process.env.ROTATION_COOLDOWN || 45),
     aisRequestDelaySec: Number(process.env.AIS_REQUEST_DELAY_SEC || 2),
     aisRateLimitBackoffSec: Number(process.env.AIS_RATE_LIMIT_BACKOFF_SEC || 30),
+    vfsRequestDelaySec: Number(process.env.VFS_REQUEST_DELAY_SEC || 3),
+    vfsRateLimitBackoffSec: Number(process.env.VFS_RATE_LIMIT_BACKOFF_SEC || 45),
     captcha2CaptchaApiKey: process.env.CAPTCHA_2CAPTCHA_API_KEY || null,
     captchaSolver: null,
+    geonixApiKey: process.env.GEONIX_API_KEY || null,
+    vfsProxyCountry: process.env.VFS_PROXY_COUNTRY || null,
+    vfsProxyUrl: process.env.VFS_PROXY_URL || null,
   };
 }
 

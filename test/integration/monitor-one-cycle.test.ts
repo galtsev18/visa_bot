@@ -98,6 +98,7 @@ describe('integration: monitor one cycle', () => {
       updateUserCurrentDate: async () => {},
       updateUserLastBooked: async () => {},
       updateUserPriority: async () => {},
+      updateUserAfterCheck: async () => {},
       logBookingAttempt: async () => {},
       updateAvailableDate: async () => {},
     };
@@ -152,6 +153,7 @@ describe('integration: monitor one cycle', () => {
       updateUserCurrentDate: async () => {},
       updateUserLastBooked: async () => {},
       updateUserPriority: async () => {},
+      updateUserAfterCheck: async () => {},
       logBookingAttempt: async () => {},
       updateAvailableDate: async () => {},
     };

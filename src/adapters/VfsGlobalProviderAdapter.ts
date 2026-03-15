@@ -29,11 +29,13 @@ function assertVfsSession(session: ProviderSession): asserts session is VfsSessi
 }
 
 /**
- * Options for VFS Global (captcha, etc.).
+ * Options for VFS Global (captcha, proxy for country-specific cabinet, etc.).
  */
 export interface VfsGlobalProviderOptions {
   captchaApiKey?: string | null;
   captchaSolver?: ((params: unknown) => Promise<string>) | null;
+  /** Proxy (e.g. Russian IP from Geonix) so cabinet is accessible. */
+  proxy?: { server: string; username: string; password: string } | null;
 }
 
 /**
@@ -52,6 +54,11 @@ export class VfsGlobalProviderAdapter implements VisaProvider {
       password: credentials.password,
       captchaApiKey: this.options.captchaApiKey ?? undefined,
       captchaSolver: this.options.captchaSolver ?? undefined,
+      vfsCentre: credentials.vfsCentre,
+      vfsCategory: credentials.vfsCategory,
+      vfsSubcategory: credentials.vfsSubcategory,
+      useBrowser: true,
+      proxy: this.options.proxy ?? undefined,
     });
     const headers = await client.login();
     const session: VfsSession = { _client: client, _headers: headers };

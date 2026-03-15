@@ -4,6 +4,21 @@ export function sleep(seconds: number): Promise<void> {
   });
 }
 
+/**
+ * Progressive (exponential) delay in seconds for retries after rate limit / quota / block.
+ * attempt 0 -> baseSec, 1 -> baseSec*multiplier, 2 -> baseSec*multiplier^2, … capped at maxSec.
+ */
+export function getProgressiveDelaySeconds(
+  attempt: number,
+  baseSec: number,
+  maxSec: number,
+  multiplier: number = 2
+): number {
+  if (attempt <= 0) return Math.min(baseSec, maxSec);
+  const delay = baseSec * Math.pow(multiplier, Math.min(attempt, 10));
+  return Math.min(Math.max(delay, baseSec), maxSec);
+}
+
 export function isSocketHangupError(err: unknown): boolean {
   if (err == null || typeof err !== 'object') return false;
   const obj = err as { code?: string; message?: unknown };

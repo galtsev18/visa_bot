@@ -39,6 +39,9 @@ export async function checkUserWithCache(
     availableDates.some((date) => isCacheStale(date, config.cacheTtl, provider))
   ) {
     log(`Refreshing date cache for user ${user.email} (${provider})...`);
+    const isVfs = provider === 'vfsglobal';
+    const requestDelaySec = isVfs ? config.vfsRequestDelaySec : config.aisRequestDelaySec;
+    const rateLimitBackoffSec = isVfs ? config.vfsRateLimitBackoffSec : config.aisRateLimitBackoffSec;
     try {
       await refreshAllDates(
         bot.client,
@@ -47,10 +50,7 @@ export async function checkUserWithCache(
         config.facilityId,
         config.cacheTtl,
         provider,
-        {
-          requestDelaySec: config.aisRequestDelaySec,
-          rateLimitBackoffSec: config.aisRateLimitBackoffSec,
-        }
+        { requestDelaySec, rateLimitBackoffSec }
       );
       datesToUse = getAvailableDates(provider);
     } catch (error) {

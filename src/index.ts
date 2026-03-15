@@ -9,6 +9,11 @@ import { getChatIdCommand } from './commands/get-chat-id';
 import { testSheetsCommand } from './commands/test-sheets';
 import { testVfsCaptchaCommand } from './commands/test-vfs-captcha';
 import { healthCommand } from './commands/health';
+import { migrateUsersCommand } from './commands/migrate-users';
+import { updateSettingsTimingsCommand } from './commands/update-settings-timings';
+import { showSheetHeadersCommand } from './commands/show-sheet-headers';
+import { getVfsLoginCredentialsCommand } from './commands/get-vfs-login-credentials';
+import { captureVfsFormRequestsCommand } from './commands/capture-vfs-form-requests';
 
 // CLI boundary: avoid raw stack dumps for unhandled rejections
 process.on('unhandledRejection', (reason) => {
@@ -37,6 +42,32 @@ program
   .command('test-sheets')
   .description('Test Google Sheets read/write access')
   .action(() => testSheetsCommand());
+
+program
+  .command('migrate-users')
+  .description('Copy all rows from legacy "Users" sheet to "US_users" (AIS columns only)')
+  .action(() => migrateUsersCommand());
+
+program
+  .command('update-settings-timings')
+  .description('Write timing defaults (5, 400, 90, 45) into the Settings sheet')
+  .action(() => updateSettingsTimingsCommand());
+
+program
+  .command('show-sheet-headers')
+  .description('Print header row of US_users and VFS users sheets')
+  .action(() => showSheetHeadersCommand());
+
+program
+  .command('get-vfs-login-credentials')
+  .description('Write first VFS user email/password from Sheets to .tmp/vfs-login.json (for browser login)')
+  .action(() => getVfsLoginCredentialsCommand());
+
+program
+  .command('capture-vfs-form-requests')
+  .description('Puppeteer: log in to VFS, run Start New Booking + select options, capture XHR/fetch to .tmp/vfs-captured-requests.json')
+  .option('--visible', 'Show browser window (solve captcha manually)')
+  .action((opts: { visible?: boolean }) => captureVfsFormRequestsCommand(opts));
 
 program
   .command('test-vfs-captcha')

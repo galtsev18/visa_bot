@@ -20,23 +20,30 @@ import {
   type SheetsClientCore,
 } from './sheetsClientCore';
 
-const SHEET_USERS = 'Users';
+const SHEET_US_USERS = 'US_users';
+const SHEET_VFS_USERS = 'VFS users';
 const SHEET_CACHE = 'Available Dates Cache';
 const SHEET_LOGS = 'Booking Attempts Log';
 const SHEET_SETTINGS = 'Settings';
 
+export type UsersSheetName = typeof SHEET_US_USERS | typeof SHEET_VFS_USERS;
+
 export interface SheetsClientState {
   core: SheetsClientCore;
-  usersHeaderCache: string[] | null;
+  usUsersHeaderCache: string[] | null;
+  vfsUsersHeaderCache: string[] | null;
   emailToRowIndex: Map<string, number>;
+  emailToSheet: Map<string, UsersSheetName>;
   cacheDateToRowIndex: Map<string, number>;
 }
 
 function createState(core: SheetsClientCore): SheetsClientState {
   return {
     core,
-    usersHeaderCache: null,
+    usUsersHeaderCache: null,
+    vfsUsersHeaderCache: null,
     emailToRowIndex: new Map(),
+    emailToSheet: new Map(),
     cacheDateToRowIndex: new Map(),
   };
 }
@@ -56,6 +63,14 @@ export interface SheetsClient {
   updateUserCurrentDate(email: string, newDate: string, timeSlot?: string | null, rowIndex?: number | null): Promise<void>;
   updateUserLastBooked(email: string, date: string, timeSlot?: string | null, rowIndex?: number | null): Promise<void>;
   updateUserPriority(email: string, priority: number, rowIndex?: number | null): Promise<void>;
+  /** Обновляет last_checked и priority одним batchUpdate (один запрос вместо двух). */
+  updateUserAfterCheck(email: string, lastChecked: Date, priority: number, rowIndex?: number | null): Promise<void>;
+  /** Переносит строки с листа "Users" в US_users (только колонки AIS). Возвращает число перенесённых строк. */
+  migrateUsersFromLegacySheet(): Promise<{ migrated: number }>;
+  /** Записывает в лист Settings текущие дефолты таймингов (REFRESH_INTERVAL, SHEETS_REFRESH_INTERVAL, CACHE_TTL, ROTATION_COOLDOWN). */
+  writeSettingsTimingDefaults(): Promise<void>;
+  /** Читает первую строку (шапку) листов US_users и VFS users. */
+  getSheetHeaders(): Promise<{ usUsers: string[]; vfsUsers: string[] }>;
 }
 
 /** CacheEntryFromSheet and BookingAttemptLog moved below; forward ref for SheetsClient */
@@ -102,10 +117,16 @@ function columnIndexToLetter(index: number): string {
   return result;
 }
 
+/** A1-notation range: имя листа в кавычках (обязательно для имён с пробелами, например "VFS users"). */
+function sheetRange(sheetName: string, a1: string): string {
+  const escaped = sheetName.replace(/'/g, "''");
+  return `'${escaped}'!${a1}`;
+}
+
 // ------------ 3. Initialization ------------
 async function ensureSheetsExist(core: SheetsClientCore): Promise<void> {
   const { sheetTitles } = await core.getSpreadsheetMetadata();
-  const required = [SHEET_USERS, SHEET_CACHE, SHEET_LOGS, SHEET_SETTINGS];
+  const required = [SHEET_US_USERS, SHEET_VFS_USERS, SHEET_CACHE, SHEET_LOGS, SHEET_SETTINGS];
   const missing = required.filter((name) => !sheetTitles.includes(name));
   if (missing.length === 0) return;
   logger.info(`Creating ${missing.length} sheet(s): ${missing.join(', ')}...`);
@@ -113,11 +134,13 @@ async function ensureSheetsExist(core: SheetsClientCore): Promise<void> {
   missing.forEach((name) => logger.info(`✅ Created sheet "${name}"`));
 }
 
-const USERS_HEADERS = [
+/** AIS (US) users — без полей VFS. Провайдер определяется по листу (ais). */
+const US_USERS_HEADERS = [
   'email',
   'password',
   'country_code',
   'schedule_id',
+  'facility_id',
   'current_date',
   'reaction_time',
   'date_ranges',
@@ -125,7 +148,24 @@ const USERS_HEADERS = [
   'last_checked',
   'last_booked',
   'priority',
-  'provider',
+];
+/** VFS users — cabinet_link, vfs_centre, vfs_category, vfs_subcategory; порядок как в таблице. Провайдер по листу (vfsglobal). */
+const VFS_USERS_HEADERS = [
+  'email',
+  'password',
+  'cabinet_link',
+  'vfs_centre',
+  'vfs_category',
+  'vfs_subcategory',
+  'current_date',
+  'reaction_time',
+  'date_ranges',
+  'active',
+  'last_checked',
+  'last_booked',
+  'priority',
+  'country_code',
+  'schedule_id',
 ];
 const CACHE_HEADERS = [
   'date',
@@ -146,27 +186,66 @@ const LOGS_HEADERS = [
 ];
 const SETTINGS_HEADERS = ['key', 'value'];
 
+function ensureSheetHeader(
+  updates: { range: string; values: string[][] }[],
+  row: string[] | undefined,
+  sheetName: string,
+  requiredHeaders: string[],
+  setCache: (headers: string[]) => void
+): void {
+  const normalized = new Set(
+    (row ?? []).map((h) => String(h).toLowerCase().replace(/\s+/g, '_'))
+  );
+  const missing = requiredHeaders.filter(
+    (h) => !normalized.has(h.toLowerCase().replace(/\s+/g, '_'))
+  );
+  if (!row || row.length === 0) {
+    updates.push({ range: `${sheetName}!1:1`, values: [requiredHeaders] });
+    setCache(requiredHeaders);
+  } else if (missing.length > 0) {
+    const newRow = [...row.map(String), ...missing];
+    const endCol = columnIndexToLetter(newRow.length - 1);
+    updates.push({
+      range: `${sheetName}!A1:${endCol}1`,
+      values: [newRow],
+    });
+    setCache(newRow);
+  } else {
+    setCache(row.map(String));
+  }
+}
+
 async function ensureHeaders(s: SheetsClientState): Promise<void> {
   const { core } = s;
   try {
     const batch = await core.batchGet([
-      `${SHEET_USERS}!1:1`,
+      `${SHEET_US_USERS}!1:1`,
+      `${SHEET_VFS_USERS}!1:1`,
       `${SHEET_CACHE}!1:1`,
       `${SHEET_LOGS}!1:1`,
       `${SHEET_SETTINGS}!1:1`,
     ]);
-    const usersRow = batch[0]?.[0] as string[] | undefined;
-    const cacheRow = batch[1]?.[0] as string[] | undefined;
-    const logsRow = batch[2]?.[0] as string[] | undefined;
-    const settingsRow = batch[3]?.[0] as string[] | undefined;
-
-    if (usersRow && usersRow.length > 0) s.usersHeaderCache = usersRow.map(String);
+    const usUsersRow = batch[0]?.[0] as string[] | undefined;
+    const vfsUsersRow = batch[1]?.[0] as string[] | undefined;
+    const cacheRow = batch[2]?.[0] as string[] | undefined;
+    const logsRow = batch[3]?.[0] as string[] | undefined;
+    const settingsRow = batch[4]?.[0] as string[] | undefined;
 
     const updates: { range: string; values: string[][] }[] = [];
-    if (!usersRow || usersRow.length === 0) {
-      updates.push({ range: `${SHEET_USERS}!1:1`, values: [USERS_HEADERS] });
-      s.usersHeaderCache = USERS_HEADERS;
-    }
+    ensureSheetHeader(
+      updates,
+      usUsersRow,
+      SHEET_US_USERS,
+      US_USERS_HEADERS,
+      (h) => (s.usUsersHeaderCache = h)
+    );
+    ensureSheetHeader(
+      updates,
+      vfsUsersRow,
+      SHEET_VFS_USERS,
+      VFS_USERS_HEADERS,
+      (h) => (s.vfsUsersHeaderCache = h)
+    );
     if (!cacheRow || cacheRow.length === 0) {
       updates.push({ range: `${SHEET_CACHE}!1:1`, values: [CACHE_HEADERS] });
     }
@@ -196,7 +275,7 @@ async function ensureHeaders(s: SheetsClientState): Promise<void> {
     ) {
       logger.warn('⚠️  Warning: One or more sheets may not exist.');
       logger.info(
-        'Required sheets: 1. "Users"  2. "Available Dates Cache"  3. "Booking Attempts Log"  4. "Settings"'
+        'Required sheets: 1. "US_users"  2. "VFS users"  3. "Available Dates Cache"  4. "Booking Attempts Log"  5. "Settings"'
       );
     } else {
       logger.warn(`⚠️  Warning: Failed to ensure headers: ${formatErrorForLog(error)}`);
@@ -244,6 +323,61 @@ export async function createSheetsClient(
       updateUserLastBookedImpl(s, email, date, timeSlot ?? null, rowIndex),
     updateUserPriority: (email, priority, rowIndex) =>
       updateUserPriorityImpl(s, email, priority, rowIndex),
+    updateUserAfterCheck: (email, lastChecked, priority, rowIndex) =>
+      updateUserAfterCheckImpl(s, email, lastChecked, priority, rowIndex),
+    async migrateUsersFromLegacySheet() {
+      const LEGACY_SHEET = 'Users';
+      const { sheetTitles } = await core.getSpreadsheetMetadata();
+      if (!sheetTitles.includes(LEGACY_SHEET)) {
+        logger.info(`Sheet "${LEGACY_SHEET}" not found, nothing to migrate`);
+        return { migrated: 0 };
+      }
+      const rows = await core.get(`${LEGACY_SHEET}!A1:Z1000`);
+      if (!rows || rows.length < 2) {
+        logger.info(`Sheet "${LEGACY_SHEET}" has no data rows`);
+        return { migrated: 0 };
+      }
+      const normalize = (h: string) => String(h).toLowerCase().replace(/\s+/g, '_');
+      const oldHeaders = (rows[0] ?? []).map((h, i) => ({ normalized: normalize(String(h)), i }));
+      const getCol = (row: (string | number)[], header: string): string => {
+        const found = oldHeaders.find((x) => x.normalized === normalize(header));
+        if (found == null) return '';
+        const v = row[found.i];
+        return v !== undefined && v !== null ? String(v) : '';
+      };
+      const dataRows = rows.slice(1) as (string | number)[][];
+      const newRows = dataRows
+        .filter((row) => row && row.length > 0)
+        .map((row) => US_USERS_HEADERS.map((h) => getCol(row, h)));
+      if (newRows.length === 0) {
+        logger.info('No non-empty rows to migrate');
+        return { migrated: 0 };
+      }
+      const endCol = columnIndexToLetter(US_USERS_HEADERS.length - 1);
+      const endRow = 1 + newRows.length;
+      await core.update(`${SHEET_US_USERS}!A2:${endCol}${endRow}`, newRows, 'RAW');
+      logger.info(`Migrated ${newRows.length} rows from "${LEGACY_SHEET}" to ${SHEET_US_USERS}`);
+      return { migrated: newRows.length };
+    },
+    writeSettingsTimingDefaults: () => writeSettingsTimingDefaultsImpl(s),
+    getSheetHeaders: () => getSheetHeadersImpl(s),
+  };
+}
+
+async function getSheetHeadersImpl(s: SheetsClientState): Promise<{
+  usUsers: string[];
+  vfsUsers: string[];
+}> {
+  const { core } = s;
+  const batch = await core.batchGet([
+    `${SHEET_US_USERS}!1:1`,
+    sheetRange(SHEET_VFS_USERS, '1:1'),
+  ]);
+  const usRow = (batch[0] ?? [])[0] ?? [];
+  const vfsRow = (batch[1] ?? [])[0] ?? [];
+  return {
+    usUsers: usRow.map((c) => String(c ?? '')),
+    vfsUsers: vfsRow.map((c) => String(c ?? '')),
   };
 }
 
@@ -267,6 +401,8 @@ const SETTINGS_KEY_MAP: Record<
 > = {
   AIS_REQUEST_DELAY_SEC: { configKey: 'aisRequestDelaySec', number: true },
   AIS_RATE_LIMIT_BACKOFF_SEC: { configKey: 'aisRateLimitBackoffSec', number: true },
+  VFS_REQUEST_DELAY_SEC: { configKey: 'vfsRequestDelaySec', number: true },
+  VFS_RATE_LIMIT_BACKOFF_SEC: { configKey: 'vfsRateLimitBackoffSec', number: true },
   REFRESH_INTERVAL: { configKey: 'refreshInterval', number: true },
   SHEETS_REFRESH_INTERVAL: { configKey: 'sheetsRefreshInterval', number: true },
   CACHE_TTL: { configKey: 'cacheTtl', number: true },
@@ -275,20 +411,67 @@ const SETTINGS_KEY_MAP: Record<
   TELEGRAM_MANAGER_CHAT_ID: { configKey: 'telegramManagerChatId', number: false },
   FACILITY_ID: { configKey: 'facilityId', number: true },
   CAPTCHA_2CAPTCHA_API_KEY: { configKey: 'captcha2CaptchaApiKey', number: false },
+  GEONIX_API_KEY: { configKey: 'geonixApiKey', number: false },
+  VFS_PROXY_COUNTRY: { configKey: 'vfsProxyCountry', number: false },
+  VFS_PROXY_URL: { configKey: 'vfsProxyUrl', number: false },
 };
 
 const SETTINGS_DEFAULT_VALUES: Record<string, string> = {
   TELEGRAM_BOT_TOKEN: '',
   TELEGRAM_MANAGER_CHAT_ID: '',
   FACILITY_ID: '134',
-  REFRESH_INTERVAL: '3',
-  SHEETS_REFRESH_INTERVAL: '300',
-  CACHE_TTL: '60',
-  ROTATION_COOLDOWN: '30',
+  REFRESH_INTERVAL: '5',
+  SHEETS_REFRESH_INTERVAL: '400',
+  CACHE_TTL: '90',
+  ROTATION_COOLDOWN: '45',
   AIS_REQUEST_DELAY_SEC: '2',
   AIS_RATE_LIMIT_BACKOFF_SEC: '30',
+  VFS_REQUEST_DELAY_SEC: '3',
+  VFS_RATE_LIMIT_BACKOFF_SEC: '45',
   CAPTCHA_2CAPTCHA_API_KEY: '',
+  GEONIX_API_KEY: '',
+  VFS_PROXY_COUNTRY: 'Russia',
+  VFS_PROXY_URL: '',
 };
+
+/** Ключи таймингов, которые записываются командой update-settings-timings. */
+const SETTINGS_TIMING_KEYS = [
+  'REFRESH_INTERVAL',
+  'SHEETS_REFRESH_INTERVAL',
+  'CACHE_TTL',
+  'ROTATION_COOLDOWN',
+] as const;
+
+async function writeSettingsTimingDefaultsImpl(s: SheetsClientState): Promise<void> {
+  const { core } = s;
+  const rows = await core.get(`${SHEET_SETTINGS}!A1:B500`);
+  if (rows.length < 2) {
+    logger.warn('Settings sheet has no data rows; run ensure headers first.');
+    return;
+  }
+  const keyToRow: Record<string, number> = {};
+  for (let i = 1; i < rows.length; i++) {
+    const k = String((rows[i] ?? [])[0] ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_');
+    if (k) keyToRow[k] = i + 1; // 1-based row for A1
+  }
+  const updates: { range: string; values: (string | number)[][] }[] = [];
+  for (const key of SETTINGS_TIMING_KEYS) {
+    const row = keyToRow[key];
+    const value = SETTINGS_DEFAULT_VALUES[key];
+    if (row != null && value !== undefined) {
+      updates.push({ range: `${SHEET_SETTINGS}!B${row}`, values: [[value]] });
+    }
+  }
+  if (updates.length === 0) {
+    logger.info('No timing keys found in Settings sheet; nothing to write.');
+    return;
+  }
+  await core.batchUpdate(updates, 'RAW');
+  logger.info(`Settings: wrote timing defaults (${SETTINGS_TIMING_KEYS.join(', ')}).`);
+}
 
 async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<string, unknown>> {
   const { core } = s;
@@ -360,39 +543,60 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
 }
 
 // ------------ 5. Domain: Users ------------
+function parseUsersFromSheet(
+  rows: (string | number)[][],
+  sheetName: UsersSheetName,
+  defaultProvider: 'ais' | 'vfs',
+  s: SheetsClientState
+): User[] {
+  const users: User[] = [];
+  if (!rows || rows.length < 2) return users;
+  const headers = rows[0].map((h) => String(h).toLowerCase().replace(/\s+/g, '_'));
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+    const userData: Record<string, unknown> = {};
+    headers.forEach((header, index) => {
+      userData[header] = row[index] ?? '';
+    });
+    if (userData.provider === undefined || userData.provider === '')
+      userData.provider = defaultProvider;
+    if (userData.active !== true && userData.active !== 'true' && userData.active !== 'TRUE')
+      continue;
+    try {
+      const oneBasedRow = i + 1;
+      (userData as Record<string, unknown>).rowIndex = oneBasedRow;
+      const user = createUser(userData);
+      users.push(user);
+      s.emailToRowIndex.set(user.email, oneBasedRow);
+      s.emailToSheet.set(user.email, sheetName);
+    } catch (error) {
+      logger.error(`Failed to parse user ${userData.email}: ${formatErrorForLog(error)}`);
+    }
+  }
+  return users;
+}
+
 async function readUsersImpl(s: SheetsClientState): Promise<User[]> {
   const { core } = s;
   try {
     s.emailToRowIndex.clear();
-    const rows = await core.get(`${SHEET_USERS}!A1:Z1000`);
-    if (!rows || rows.length < 2) return [];
+    s.emailToSheet.clear();
+    const batch = await core.batchGet([
+      `${SHEET_US_USERS}!A1:Z1000`,
+      `${SHEET_VFS_USERS}!A1:Z1000`,
+    ]);
+    const usRows = batch[0] ?? [];
+    const vfsRows = batch[1] ?? [];
 
-    const headers = rows[0].map((h) => String(h).toLowerCase().replace(/\s+/g, '_'));
-    const users: User[] = [];
+    if (usRows.length >= 2) s.usUsersHeaderCache = usRows[0].map(String);
+    if (vfsRows.length >= 2) s.vfsUsersHeaderCache = vfsRows[0].map(String);
 
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (!row || row.length === 0) continue;
+    const usUsers = parseUsersFromSheet(usRows, SHEET_US_USERS, 'ais', s);
+    const vfsUsers = parseUsersFromSheet(vfsRows, SHEET_VFS_USERS, 'vfs', s);
+    const users = [...usUsers, ...vfsUsers];
 
-      const userData: Record<string, unknown> = {};
-      headers.forEach((header, index) => {
-        userData[header] = row[index] ?? '';
-      });
-
-      if (userData.active === true || userData.active === 'true' || userData.active === 'TRUE') {
-        try {
-          const oneBasedRow = i + 1;
-          (userData as Record<string, unknown>).rowIndex = oneBasedRow;
-          const user = createUser(userData);
-          users.push(user);
-          s.emailToRowIndex.set(user.email, oneBasedRow);
-        } catch (error) {
-          logger.error(`Failed to parse user ${userData.email}: ${formatErrorForLog(error)}`);
-        }
-      }
-    }
-
-    logger.info(`Read ${users.length} active users from Google Sheets`);
+    logger.info(`Read ${users.length} active users from Google Sheets (US: ${usUsers.length}, VFS: ${vfsUsers.length})`);
     return users;
   } catch (error) {
     logger.error(`Failed to read users from Google Sheets: ${formatErrorForLog(error)}`);
@@ -407,39 +611,23 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
   const { core } = s;
   try {
     const batch = await core.batchGet([
-      `${SHEET_USERS}!A1:Z1000`,
+      `${SHEET_US_USERS}!A1:Z1000`,
+      `${SHEET_VFS_USERS}!A1:Z1000`,
       `${SHEET_CACHE}!A1:F1000`,
     ]);
-    const usersRows = batch[0] ?? [];
-    const cacheRows = batch[1] ?? [];
+    const usRows = batch[0] ?? [];
+    const vfsRows = batch[1] ?? [];
+    const cacheRows = batch[2] ?? [];
 
     s.emailToRowIndex.clear();
+    s.emailToSheet.clear();
     s.cacheDateToRowIndex.clear();
 
-    const users: User[] = [];
-    if (usersRows.length >= 2) {
-      const headers = usersRows[0].map((h) => String(h).toLowerCase().replace(/\s+/g, '_'));
-      s.usersHeaderCache = usersRows[0].map(String);
-      for (let i = 1; i < usersRows.length; i++) {
-        const row = usersRows[i];
-        if (!row || row.length === 0) continue;
-        const userData: Record<string, unknown> = {};
-        headers.forEach((header, index) => {
-          userData[header] = row[index] ?? '';
-        });
-        if (userData.active !== true && userData.active !== 'true' && userData.active !== 'TRUE')
-          continue;
-        try {
-          const oneBasedRow = i + 1;
-          (userData as Record<string, unknown>).rowIndex = oneBasedRow;
-          const user = createUser(userData);
-          users.push(user);
-          s.emailToRowIndex.set(user.email, oneBasedRow);
-        } catch (err) {
-          logger.error(`Failed to parse user ${userData.email}: ${formatErrorForLog(err)}`);
-        }
-      }
-    }
+    if (usRows.length >= 2) s.usUsersHeaderCache = usRows[0].map(String);
+    if (vfsRows.length >= 2) s.vfsUsersHeaderCache = vfsRows[0].map(String);
+    const usUsers = parseUsersFromSheet(usRows, SHEET_US_USERS, 'ais', s);
+    const vfsUsers = parseUsersFromSheet(vfsRows, SHEET_VFS_USERS, 'vfs', s);
+    const users = [...usUsers, ...vfsUsers];
 
     const cacheEntries: CacheEntryFromSheet[] = [];
     if (cacheRows.length >= 2) {
@@ -569,7 +757,7 @@ async function updateAvailableDateImpl(
       }
     }
 
-    logger.info(`Updated cache for date ${date}: available=${available}`);
+    logger.debug(`Updated cache for date ${date}: available=${available}`);
   } catch (error) {
     logger.error(`Failed to update cache for date ${date}: ${formatErrorForLog(error)}`);
   }
@@ -597,14 +785,20 @@ async function logBookingAttemptImpl(s: SheetsClientState, attempt: BookingAttem
   }
 }
 
-async function getColumnIndex(s: SheetsClientState, headerName: string): Promise<number> {
+async function getColumnIndex(
+  s: SheetsClientState,
+  headerName: string,
+  sheet: UsersSheetName
+): Promise<number> {
   const { core } = s;
   try {
-    let headers = s.usersHeaderCache;
+    let headers =
+      sheet === SHEET_US_USERS ? s.usUsersHeaderCache : s.vfsUsersHeaderCache;
     if (!headers || headers.length === 0) {
-      const rows = await core.get(`${SHEET_USERS}!1:1`);
+      const rows = await core.get(sheetRange(sheet, '1:1'));
       headers = (rows[0] ?? []).map(String);
-      s.usersHeaderCache = headers;
+      if (sheet === SHEET_US_USERS) s.usUsersHeaderCache = headers;
+      else s.vfsUsersHeaderCache = headers;
     }
     const normalizedHeader = headerName.toLowerCase().replace(/\s+/g, '_');
     for (let i = 0; i < headers.length; i++) {
@@ -613,9 +807,35 @@ async function getColumnIndex(s: SheetsClientState, headerName: string): Promise
     }
     return -1;
   } catch (error) {
-    logger.error(`Failed to get column index for ${headerName}: ${formatErrorForLog(error)}`);
+    logger.error(`Failed to get column index for ${headerName} (${sheet}): ${formatErrorForLog(error)}`);
     return -1;
   }
+}
+
+async function resolveSheetAndRow(
+  s: SheetsClientState,
+  email: string,
+  rowIndex?: number | null
+): Promise<{ sheet: UsersSheetName; row: number } | null> {
+  const sheet = s.emailToSheet.get(email);
+  const r = rowIndex ?? s.emailToRowIndex.get(email);
+  if (sheet && r != null && r > 0) return { sheet, row: r };
+  const { core } = s;
+  for (const sh of [SHEET_US_USERS, SHEET_VFS_USERS] as const) {
+    const emailCol = await getColumnIndex(s, 'email', sh);
+    if (emailCol < 0) continue;
+    const letter = columnIndexToLetter(emailCol);
+    const rows = await core.get(sheetRange(sh, `${letter}:${letter}`));
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === email) {
+        const row = i + 1;
+        s.emailToRowIndex.set(email, row);
+        s.emailToSheet.set(email, sh);
+        return { sheet: sh, row };
+      }
+    }
+  }
+  return null;
 }
 
 async function updateUserLastCheckedImpl(
@@ -626,31 +846,13 @@ async function updateUserLastCheckedImpl(
 ): Promise<void> {
   const { core } = s;
   try {
-    const r = rowIndex ?? s.emailToRowIndex.get(email);
-    if (r != null && r > 0) {
-      const lastCheckedCol = await getColumnIndex(s, 'last_checked');
-      if (lastCheckedCol < 0) return;
-      const colLetter = columnIndexToLetter(lastCheckedCol);
-      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[timestamp.toISOString()]], 'RAW');
-      return;
-    }
-    const emailCol = await getColumnIndex(s, 'email');
-    const lastCheckedCol = await getColumnIndex(s, 'last_checked');
-    if (emailCol < 0 || lastCheckedCol < 0) return;
-    const emailColLetter = columnIndexToLetter(emailCol);
-    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
-    let found = -1;
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === email) {
-        found = i + 1;
-        s.emailToRowIndex.set(email, found);
-        break;
-      }
-    }
-    if (found > 0) {
-      const colLetter = columnIndexToLetter(lastCheckedCol);
-      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[timestamp.toISOString()]], 'RAW');
-    }
+    const resolved = await resolveSheetAndRow(s, email, rowIndex);
+    if (!resolved) return;
+    const { sheet, row: r } = resolved;
+    const lastCheckedCol = await getColumnIndex(s, 'last_checked', sheet);
+    if (lastCheckedCol < 0) return;
+    const colLetter = columnIndexToLetter(lastCheckedCol);
+    await core.update(sheetRange(sheet, `${colLetter}${r}`), [[timestamp.toISOString()]], 'RAW');
   } catch (error) {
     logger.error(`Failed to update last_checked for ${email}: ${formatErrorForLog(error)}`);
   }
@@ -665,33 +867,14 @@ async function updateUserCurrentDateImpl(
 ): Promise<void> {
   const { core } = s;
   try {
-    const r = rowIndex ?? s.emailToRowIndex.get(email);
-    if (r != null && r > 0) {
-      const currentDateCol = await getColumnIndex(s, 'current_date');
-      if (currentDateCol < 0) return;
-      const colLetter = columnIndexToLetter(currentDateCol);
-      const value = formatDateTimeForSheet(newDate, timeSlot);
-      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[value]], 'RAW');
-      return;
-    }
-    const emailCol = await getColumnIndex(s, 'email');
-    const currentDateCol = await getColumnIndex(s, 'current_date');
-    if (emailCol < 0 || currentDateCol < 0) return;
-    const emailColLetter = columnIndexToLetter(emailCol);
-    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
-    let found = -1;
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === email) {
-        found = i + 1;
-        s.emailToRowIndex.set(email, found);
-        break;
-      }
-    }
-    if (found > 0) {
-      const colLetter = columnIndexToLetter(currentDateCol);
-      const value = formatDateTimeForSheet(newDate, timeSlot);
-      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[value]], 'RAW');
-    }
+    const resolved = await resolveSheetAndRow(s, email, rowIndex);
+    if (!resolved) return;
+    const { sheet, row: r } = resolved;
+    const currentDateCol = await getColumnIndex(s, 'current_date', sheet);
+    if (currentDateCol < 0) return;
+    const colLetter = columnIndexToLetter(currentDateCol);
+    const value = formatDateTimeForSheet(newDate, timeSlot);
+    await core.update(sheetRange(sheet, `${colLetter}${r}`), [[value]], 'RAW');
   } catch (error) {
     logger.error(`Failed to update current_date for ${email}: ${formatErrorForLog(error)}`);
   }
@@ -706,33 +889,14 @@ async function updateUserLastBookedImpl(
 ): Promise<void> {
   const { core } = s;
   try {
-    const r = rowIndex ?? s.emailToRowIndex.get(email);
-    if (r != null && r > 0) {
-      const lastBookedCol = await getColumnIndex(s, 'last_booked');
-      if (lastBookedCol < 0) return;
-      const colLetter = columnIndexToLetter(lastBookedCol);
-      const value = formatDateTimeForSheet(date, timeSlot);
-      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[value]], 'RAW');
-      return;
-    }
-    const emailCol = await getColumnIndex(s, 'email');
-    const lastBookedCol = await getColumnIndex(s, 'last_booked');
-    if (emailCol < 0 || lastBookedCol < 0) return;
-    const emailColLetter = columnIndexToLetter(emailCol);
-    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
-    let found = -1;
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === email) {
-        found = i + 1;
-        s.emailToRowIndex.set(email, found);
-        break;
-      }
-    }
-    if (found > 0) {
-      const colLetter = columnIndexToLetter(lastBookedCol);
-      const value = formatDateTimeForSheet(date, timeSlot);
-      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[value]], 'RAW');
-    }
+    const resolved = await resolveSheetAndRow(s, email, rowIndex);
+    if (!resolved) return;
+    const { sheet, row: r } = resolved;
+    const lastBookedCol = await getColumnIndex(s, 'last_booked', sheet);
+    if (lastBookedCol < 0) return;
+    const colLetter = columnIndexToLetter(lastBookedCol);
+    const value = formatDateTimeForSheet(date, timeSlot);
+    await core.update(sheetRange(sheet, `${colLetter}${r}`), [[value]], 'RAW');
   } catch (error) {
     logger.error(`Failed to update last_booked for ${email}: ${formatErrorForLog(error)}`);
   }
@@ -746,33 +910,45 @@ async function updateUserPriorityImpl(
 ): Promise<void> {
   const { core } = s;
   try {
-    const r = rowIndex ?? s.emailToRowIndex.get(email);
-    if (r != null && r > 0) {
-      const priorityCol = await getColumnIndex(s, 'priority');
-      if (priorityCol < 0) return;
-      const colLetter = columnIndexToLetter(priorityCol);
-      await core.update(`${SHEET_USERS}!${colLetter}${r}`, [[priority]], 'RAW');
-      return;
-    }
-    const emailCol = await getColumnIndex(s, 'email');
-    const priorityCol = await getColumnIndex(s, 'priority');
-    if (emailCol < 0 || priorityCol < 0) return;
-    const emailColLetter = columnIndexToLetter(emailCol);
-    const rows = await core.get(`${SHEET_USERS}!${emailColLetter}:${emailColLetter}`);
-    let found = -1;
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] === email) {
-        found = i + 1;
-        s.emailToRowIndex.set(email, found);
-        break;
-      }
-    }
-    if (found > 0) {
-      const colLetter = columnIndexToLetter(priorityCol);
-      await core.update(`${SHEET_USERS}!${colLetter}${found}`, [[priority]], 'RAW');
-    }
+    const resolved = await resolveSheetAndRow(s, email, rowIndex);
+    if (!resolved) return;
+    const { sheet, row: r } = resolved;
+    const priorityCol = await getColumnIndex(s, 'priority', sheet);
+    if (priorityCol < 0) return;
+    const colLetter = columnIndexToLetter(priorityCol);
+    await core.update(sheetRange(sheet, `${colLetter}${r}`), [[priority]], 'RAW');
   } catch (error) {
     logger.error(`Failed to update priority for ${email}: ${formatErrorForLog(error)}`);
+  }
+}
+
+async function updateUserAfterCheckImpl(
+  s: SheetsClientState,
+  email: string,
+  lastChecked: Date,
+  priority: number,
+  rowIndex?: number | null
+): Promise<void> {
+  const { core } = s;
+  try {
+    const resolved = await resolveSheetAndRow(s, email, rowIndex);
+    if (!resolved) return;
+    const { sheet, row: r } = resolved;
+    const lastCheckedCol = await getColumnIndex(s, 'last_checked', sheet);
+    const priorityCol = await getColumnIndex(s, 'priority', sheet);
+    if (lastCheckedCol < 0 || priorityCol < 0) return;
+
+    const lastCheckedLetter = columnIndexToLetter(lastCheckedCol);
+    const priorityLetter = columnIndexToLetter(priorityCol);
+    await core.batchUpdate(
+      [
+        { range: sheetRange(sheet, `${lastCheckedLetter}${r}`), values: [[lastChecked.toISOString()]] },
+        { range: sheetRange(sheet, `${priorityLetter}${r}`), values: [[priority]] },
+      ],
+      'RAW'
+    );
+  } catch (error) {
+    logger.error(`Failed to update user after check ${email}: ${formatErrorForLog(error)}`);
   }
 }
 
@@ -846,4 +1022,31 @@ export async function updateUserPriority(
   rowIndex?: number | null
 ): Promise<void> {
   if (defaultClient) await defaultClient.updateUserPriority(email, priority, rowIndex);
+}
+
+export async function updateUserAfterCheck(
+  email: string,
+  lastChecked: Date,
+  priority: number,
+  rowIndex?: number | null
+): Promise<void> {
+  if (defaultClient) await defaultClient.updateUserAfterCheck(email, lastChecked, priority, rowIndex);
+}
+
+export async function migrateUsersFromLegacySheet(): Promise<{ migrated: number }> {
+  if (!defaultClient) throw new Error('Sheets not initialized. Run initializeSheets first.');
+  return defaultClient.migrateUsersFromLegacySheet();
+}
+
+export async function writeSettingsTimingDefaults(): Promise<void> {
+  if (!defaultClient) throw new Error('Sheets not initialized. Run initializeSheets first.');
+  return defaultClient.writeSettingsTimingDefaults();
+}
+
+export async function getSheetHeaders(): Promise<{
+  usUsers: string[];
+  vfsUsers: string[];
+}> {
+  if (!defaultClient) throw new Error('Sheets not initialized. Run initializeSheets first.');
+  return defaultClient.getSheetHeaders();
 }

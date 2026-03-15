@@ -24,18 +24,18 @@ export async function testSheetsCommand(): Promise<void> {
     );
     logger.info('✅ Google Sheets initialized successfully');
 
-    logger.info('\n[2/5] Testing read access to Users sheet...');
+    logger.info('\n[2/5] Testing read access to US_users and VFS users sheets...');
     try {
       const users = await readUsers();
-      logger.info(`✅ Successfully read Users sheet`);
+      logger.info(`✅ Successfully read user sheets`);
       logger.info(`   Found ${users.length} active user(s)`);
       if (users.length > 0) {
         logger.info(`   First user: ${users[0].email}`);
       } else {
-        logger.info('   ⚠️  No active users found (make sure "active" column is set to TRUE)');
+        logger.info('   ⚠️  No active users found (make sure "active" column is set to TRUE in US_users or VFS users)');
       }
     } catch (error) {
-      logger.info(`❌ Failed to read Users sheet: ${formatErrorForLog(error)}`);
+      logger.info(`❌ Failed to read user sheets: ${formatErrorForLog(error)}`);
       throw error;
     }
 
@@ -139,7 +139,8 @@ export async function testSheetsCommand(): Promise<void> {
     } else if (errMsg.includes('Unable to parse range') || errMsg.includes('sheet')) {
       logger.info('\n🔧 Troubleshooting - Sheet Not Found:');
       logger.info('1. Make sure you have created these sheets in your spreadsheet:');
-      logger.info('   - "Users"');
+      logger.info('   - "US_users" (AIS users)');
+      logger.info('   - "VFS users" (VFS users)');
       logger.info('   - "Available Dates Cache"');
       logger.info('   - "Booking Attempts Log"');
       logger.info('2. Sheet names must match exactly (case-sensitive)');
