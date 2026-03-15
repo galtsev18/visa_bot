@@ -3,12 +3,13 @@
  * select centre/category/subcategory from the credentials file, and capture all XHR/fetch
  * requests (URL, method, postData). Writes .tmp/vfs-captured-requests.json.
  *
- * Requires: run get-vfs-login-credentials first; CAPTCHA_2CAPTCHA_API_KEY in .env for
- * automatic captcha, or run with --visible to solve captcha manually.
+ * Requires: run get-vfs-login-credentials first. Proxy (GEONIX_API_KEY, VFS_PROXY_COUNTRY)
+ * and CAPTCHA_2CAPTCHA_API_KEY from Settings sheet or .env; or --visible for manual captcha.
  */
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { getConfig } from '../lib/config';
+import { getConfig, validateEnvForSheets } from '../lib/config';
+import { initializeSheets, readSettingsFromSheet } from '../lib/sheets';
 import { resolveVfsProxy } from '../lib/geonixProxy';
 import { localeFromLoginUrl } from '../lib/vfsUtils';
 import { vfsBrowserLogin, vfsGetAvailableDatesFromPage } from '../lib/providers/vfsBrowserFlow';
@@ -28,7 +29,11 @@ interface CapturedRequest {
 export async function captureVfsFormRequestsCommand(options: {
   visible?: boolean;
 }): Promise<void> {
-  const config = getConfig();
+  const envConfig = getConfig();
+  validateEnvForSheets(envConfig);
+  await initializeSheets(envConfig.googleCredentialsPath!, envConfig.googleSheetsId!);
+  const sheetSettings = (await readSettingsFromSheet()) as Record<string, unknown>;
+  const config = { ...envConfig, ...sheetSettings };
   const credsPath = join(process.cwd(), OUT_DIR, CREDS_FILE);
   let creds: {
     email: string;

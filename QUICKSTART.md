@@ -53,14 +53,34 @@ npm install
    copy .env.example .env
    ```
 
-2. Edit `.env` and fill in:
+2. Edit `.env` and fill in **only**:
    ```
    GOOGLE_SHEETS_ID=your_spreadsheet_id_here
    GOOGLE_CREDENTIALS_PATH=./credentials.json
-   TELEGRAM_BOT_TOKEN=your_bot_token_here
-   TELEGRAM_MANAGER_CHAT_ID=your_chat_id_here
-   FACILITY_ID=134
    ```
+   All other settings (Telegram, VFS proxy, timings) — in the spreadsheet **Settings** sheet, see table below.
+
+3. **Settings sheet** (in the same spreadsheet): create a sheet named **Settings**, columns **key** and **value**. Add rows (the bot can add missing keys automatically when you run it; you can also fill manually):
+
+   | key | value |
+   |-----|--------|
+   | TELEGRAM_BOT_TOKEN | ваш_токен_от_BotFather |
+   | TELEGRAM_MANAGER_CHAT_ID | ваш_chat_id |
+   | FACILITY_ID | 134 |
+   | REFRESH_INTERVAL | 5 |
+   | SHEETS_REFRESH_INTERVAL | 400 |
+   | CACHE_TTL | 90 |
+   | ROTATION_COOLDOWN | 45 |
+   | AIS_REQUEST_DELAY_SEC | 2 |
+   | AIS_RATE_LIMIT_BACKOFF_SEC | 30 |
+   | VFS_REQUEST_DELAY_SEC | 3 |
+   | VFS_RATE_LIMIT_BACKOFF_SEC | 45 |
+   | CAPTCHA_2CAPTCHA_API_KEY | (опционально, для 2Captcha) |
+   | **GEONIX_API_KEY** | **(только здесь, не в .env)** ключ с https://geonix.com/personal/api/ |
+   | **VFS_PROXY_COUNTRY** | **Russia** (или другая страна кабинета VFS) |
+   | **VFS_PROXY_URL** | (опционально) http://login:password@host:port — подменяет Geonix |
+
+   Полный список ключей и значений по умолчанию: [docs/SETTINGS_SHEET.md](docs/SETTINGS_SHEET.md).
 
 ## Step 5: Test Google Sheets Connection
 

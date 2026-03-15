@@ -6,7 +6,7 @@ The bot runs as a **systemd service**: it starts on boot and restarts automatica
 
 - Linux (Debian/Ubuntu or similar)
 - Node.js 18+ and npm
-- Your `.env` and `credentials.json` on the server
+- `.env` (only GOOGLE_SHEETS_ID and GOOGLE_CREDENTIALS_PATH) and `credentials.json` on the server; other settings in the spreadsheet **Settings** sheet
 
 ## 2. One-time setup on the server (as root)
 
@@ -49,19 +49,19 @@ scp -r src package.json package-lock.json tsconfig.json deploy root@YOUR_SERVER_
 scp credentials.json root@YOUR_SERVER_IP:/opt/us-visa-bot/
 ```
 
-Copy `.env` to the server (same keys as locally; file `deploy/.env` is a copy for the server and is in `.gitignore`):
+Copy `.env` to the server. Only **GOOGLE_SHEETS_ID** and **GOOGLE_CREDENTIALS_PATH** are read from .env; Telegram, VFS proxy, intervals, etc. — from the **Settings** sheet in the spreadsheet. File `deploy/.env` is a template for the server (in `.gitignore`):
 
 ```bash
 scp deploy/.env root@YOUR_SERVER_IP:/opt/us-visa-bot/.env
 ```
 
-**Or** from PowerShell, merge your keys into the existing server `.env` without overwriting the rest (run from a machine that can SSH to the server):
+**Or** from PowerShell (strips GEONIX/VFS_PROXY from local .env before copy; those go in Settings sheet):
 
 ```powershell
 .\deploy\sync-env-to-server.ps1 root@YOUR_SERVER_IP
 ```
 
-If you don't use `deploy/.env`, copy your project root `.env` instead, or create `.env` on the server from `.env.example` and fill it in.
+If you don't use `deploy/.env`, copy your project root `.env` or create `.env` from `.env.example` and fill in at least `GOOGLE_SHEETS_ID` and `GOOGLE_CREDENTIALS_PATH`.
 
 ### 2.3 On the server: install dependencies and configure
 
@@ -82,14 +82,13 @@ cp .env.example .env
 nano .env
 ```
 
-Set at least `GOOGLE_SHEETS_ID` and `GOOGLE_CREDENTIALS_PATH`. Save (Ctrl+O, Enter, Ctrl+X).  
-Ensure `credentials.json` is in `/opt/us-visa-bot/`. Other settings can stay in the Google Sheet “Settings” tab.
+In `.env` put only `GOOGLE_SHEETS_ID` and `GOOGLE_CREDENTIALS_PATH`. Save (Ctrl+O, Enter, Ctrl+X).  
+Ensure `credentials.json` is in `/opt/us-visa-bot/`. Other settings (Telegram, VFS proxy, etc.) go in the Google Sheet “Settings” tab.
 
-**If you use VFS with proxy (Geonix):** add the same variables as in your local `.env`:
-- `GEONIX_API_KEY` — your Geonix API key (from https://geonix.com/personal/api/)
-- `VFS_PROXY_COUNTRY=Russia` (or the country of your VFS cabinet)
-
-Either copy your local `.env` to the server with `scp` (so the key is already there) or add these lines in `nano .env` on the server.
+**If you use VFS with proxy (Geonix):** add in the **Settings** sheet (not in .env):
+- key `GEONIX_API_KEY`, value — your API key from https://geonix.com/personal/api/
+- key `VFS_PROXY_COUNTRY`, value — e.g. `Russia` (country of your VFS cabinet)
+Or key `VFS_PROXY_URL`, value — `http://login:password@host:port` to use a single proxy URL instead of Geonix.
 
 ### 2.4 Install the systemd service and start the bot
 

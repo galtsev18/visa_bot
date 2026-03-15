@@ -1,6 +1,6 @@
 /**
  * Solve image captcha via 2Captcha (or compatible) API.
- * API key: options.apiKey, or CAPTCHA_2CAPTCHA_API_KEY in .env.
+ * API key: options.apiKey, or CAPTCHA_2CAPTCHA_API_KEY in .env / Settings sheet.
  */
 
 export interface CaptchaOptions {
@@ -31,7 +31,7 @@ export async function solveImageCaptcha(
   if (!apiKey) {
     throw new Error(
       'Captcha solving requires CAPTCHA_2CAPTCHA_API_KEY. ' +
-        'Get a key at https://2captcha.com and add it to .env, or use manual captcha (see docs).'
+        'Get a key at https://2captcha.com, add it to .env or Settings sheet (CAPTCHA_2CAPTCHA_API_KEY), or use manual captcha (see docs).'
     );
   }
 
@@ -82,7 +82,7 @@ export async function solveRecaptchaV2(
   if (!apiKey) {
     throw new Error(
       'reCAPTCHA solving requires CAPTCHA_2CAPTCHA_API_KEY. ' +
-        'Add it to .env or use manual captcha.'
+        'Add it to .env or Settings sheet (CAPTCHA_2CAPTCHA_API_KEY), or use manual captcha.'
     );
   }
 
@@ -135,7 +135,7 @@ export async function solveTurnstile(
   if (!apiKey) {
     throw new Error(
       'Turnstile solving requires CAPTCHA_2CAPTCHA_API_KEY. ' +
-        'Add it to .env (see https://2captcha.com).'
+        'Add it to .env or Settings sheet (see https://2captcha.com).'
     );
   }
 
@@ -209,7 +209,7 @@ export async function solveTurnstileChallengePage(
   const apiKey = options.apiKey ?? process.env.CAPTCHA_2CAPTCHA_API_KEY;
   if (!apiKey) {
     throw new Error(
-      'Cloudflare Turnstile solving requires CAPTCHA_2CAPTCHA_API_KEY. Add it to .env.'
+      'Cloudflare Turnstile solving requires CAPTCHA_2CAPTCHA_API_KEY. Add it to .env or Settings sheet.'
     );
   }
 

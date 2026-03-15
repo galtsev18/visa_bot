@@ -499,15 +499,23 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
     const allKeys = Object.keys(SETTINGS_KEY_MAP);
     const missingKeys = allKeys.filter((k) => !existingKeys.has(k));
     if (missingKeys.length > 0) {
-      const appendRows = missingKeys.map((k) => [k, SETTINGS_DEFAULT_VALUES[k] ?? '']);
+      const valueToWrite = (key: string): string => {
+        const fromEnv = key === 'GEONIX_API_KEY' ? process.env.GEONIX_API_KEY
+          : key === 'VFS_PROXY_COUNTRY' ? process.env.VFS_PROXY_COUNTRY
+          : key === 'VFS_PROXY_URL' ? process.env.VFS_PROXY_URL
+          : null;
+        if (fromEnv != null && String(fromEnv).trim() !== '') return String(fromEnv).trim();
+        return SETTINGS_DEFAULT_VALUES[key] ?? '';
+      };
+      const appendRows = missingKeys.map((k) => [k, valueToWrite(k)]);
       await core.append(`${SHEET_SETTINGS}!A:B`, appendRows, {
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
       });
-      logger.info(`Settings: added missing keys: ${missingKeys.join(', ')}`);
+      logger.info(`Settings: added missing keys: ${missingKeys.join(', ')} (values from .env if present)`);
       for (const k of missingKeys) {
         const mapping = SETTINGS_KEY_MAP[k];
-        const raw = SETTINGS_DEFAULT_VALUES[k] ?? '';
+        const raw = valueToWrite(k);
         const value = mapping.number ? Number(raw) : raw != null ? String(raw).trim() : '';
         if (!mapping.number || (!Number.isNaN(value as number) && value !== undefined)) {
           overrides[mapping.configKey] = value;
@@ -515,6 +523,12 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
       }
     }
 
+    const envFallbackForProxyKeys: Record<string, string | undefined> = {
+      GEONIX_API_KEY: process.env.GEONIX_API_KEY?.trim(),
+      VFS_PROXY_COUNTRY: process.env.VFS_PROXY_COUNTRY?.trim(),
+      VFS_PROXY_URL: process.env.VFS_PROXY_URL?.trim(),
+    };
+    const updates: { range: string; values: string[][] }[] = [];
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i] as (string | number)[];
       if (!row || row.length < 1) continue;
@@ -522,15 +536,27 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
         .trim()
         .toUpperCase()
         .replace(/\s+/g, '_');
-      const raw = row[1];
+      let raw = row[1];
       if (!key) continue;
       const mapping = SETTINGS_KEY_MAP[key];
       if (!mapping) continue;
       if (mapping.configKey === 'googleSheetsId' || mapping.configKey === 'googleCredentialsPath')
         continue;
+      const fromEnv = envFallbackForProxyKeys[key];
+      if (fromEnv && (raw === undefined || raw === null || String(raw).trim() === '')) {
+        raw = fromEnv;
+        updates.push({
+          range: `${SHEET_SETTINGS}!B${i + 1}`,
+          values: [[fromEnv]],
+        });
+      }
       const value = mapping.number ? Number(raw) : raw != null ? String(raw).trim() : '';
       if (mapping.number && (value === undefined || Number.isNaN(value as number))) continue;
       overrides[mapping.configKey] = value;
+    }
+    if (updates.length > 0) {
+      await core.batchUpdate(updates, 'RAW');
+      logger.info(`Settings: wrote GEONIX/VFS proxy values from .env into sheet (${updates.length} cells)`);
     }
     if (Object.keys(overrides).length > 0) {
       logger.info(`Settings from sheet: ${Object.keys(overrides).join(', ')}`);

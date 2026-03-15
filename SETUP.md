@@ -119,32 +119,19 @@ timestamp | user_email | date_attempted | result | reason | old_date | new_date
 3. Copy the chat ID that's displayed
 4. Press Ctrl+C to stop
 
-### 4. Configure .env File
+### 4. Configure .env and Settings sheet
 
-Edit the `.env` file with your actual values:
+**In `.env`** put only (required for Sheets access):
 
 ```env
-# Google Sheets
 GOOGLE_SHEETS_ID=your_spreadsheet_id_here
 GOOGLE_CREDENTIALS_PATH=./credentials.json
-
-# Telegram
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_MANAGER_CHAT_ID=your_chat_id_here
-
-# Visa System
-FACILITY_ID=134
-
-# Monitoring (optional - defaults shown)
-REFRESH_INTERVAL=3
-SHEETS_REFRESH_INTERVAL=300
-CACHE_TTL=60
-ROTATION_COOLDOWN=30
 ```
 
+All other settings (Telegram, FACILITY_ID, intervals, VFS proxy, 2Captcha) — in the spreadsheet **Settings** sheet (columns **key** and **value**). Full list: [docs/SETTINGS_SHEET.md](docs/SETTINGS_SHEET.md).
+
 **Important:**
-- Remove any quotes around values
-- No spaces around the `=` sign
+- No spaces around `=` in .env; no quotes around values
 - Make sure `credentials.json` is in the project root
 
 ### 5. Add Users to Google Sheets
@@ -209,7 +196,7 @@ When a booking is successful, you should receive a Telegram message to the chat 
 ### Bot token errors
 - Make sure token has no quotes or spaces
 - Verify token with @BotFather
-- Check that token is correctly set in .env
+- Check that token is set in .env or in the Settings sheet (key TELEGRAM_BOT_TOKEN)
 
 ### Google Sheets errors
 - Verify service account has Editor access to spreadsheet

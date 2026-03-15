@@ -12,14 +12,11 @@ export class EnvConfigProvider implements ConfigProvider {
   }
 }
 
-/** String keys: do not override env when sheet value is empty (secrets / optional from .env). */
+/** String keys: do not override env when sheet value is empty (secrets from .env). */
 const KEEP_ENV_IF_SHEET_EMPTY_STRING = [
   'telegramBotToken',
   'telegramManagerChatId',
   'captcha2CaptchaApiKey',
-  'geonixApiKey',
-  'vfsProxyCountry',
-  'vfsProxyUrl',
 ] as const;
 
 /** Numeric keys: do not override env when sheet value is 0 or NaN (empty cell → Number('') === 0). */

@@ -54,10 +54,7 @@ Once past Cloudflare (if any), VFS login may use a captcha (image or reCAPTCHA).
 #### Option A: 2Captcha (automatic, for Turnstile / reCAPTCHA / image)
 
 1. Register at [2Captcha](https://2captcha.com).
-2. Add to `.env`:
-   ```env
-   CAPTCHA_2CAPTCHA_API_KEY=your_api_key
-   ```
+2. Add the API key in the **Settings** sheet (key `CAPTCHA_2CAPTCHA_API_KEY`, value — your key) or in `.env` as `CAPTCHA_2CAPTCHA_API_KEY=your_api_key`.
 3. The bot will send captchas to 2Captcha and use the solution for login (paid per solve).
 
 #### Option B: Manual solver (callback)
@@ -91,22 +88,20 @@ The **cabinet link** in the table (e.g. for Russia) is often only accessible fro
 
 1. Register at [geonix.com](https://geonix.com/), buy proxies for the needed country (e.g. Russia).
 2. In the [API section](https://geonix.com/personal/api/) of your dashboard, generate an API key.
-3. Set in `.env` or in the **Settings** sheet:
-   - **GEONIX_API_KEY** — your API key
-   - **VFS_PROXY_COUNTRY** — country name (e.g. `Russia`). Default: `Russia`.
-4. On startup (monitor) or when running `capture-vfs-form-requests`, the app will call `GET https://geonix.com/personal/api/v1/{apiKey}/proxy/list/ipv4`, filter by country, and use the first active proxy for the VFS browser (Puppeteer).
+3. In the Google Sheet **Settings** tab (key/value), add:
+   - key **GEONIX_API_KEY**, value — your API key
+   - key **VFS_PROXY_COUNTRY**, value — country name (e.g. `Russia`). Default in sheet: `Russia`.
+4. On startup (monitor) or when running `capture-vfs-form-requests`, the app reads these from the sheet, calls `GET https://geonix.com/personal/api/v1/{apiKey}/proxy/list/ipv4`, filter by country, and uses the first active proxy for the VFS browser (Puppeteer).
 
 **Option B: Manual proxy URL**  
-Set **VFS_PROXY_URL** in `.env` or Settings (overrides Geonix):
+In the **Settings** sheet, add key **VFS_PROXY_URL**, value — full URL (overrides Geonix):
 
 - Format: `http://login:password@host:port`  
-- Example: `http://user:secret@proxy.example.com:8080`
+- Example value in Settings: `http://user:secret@proxy.example.com:8080`
 
-If the provider sent you a letter with **«Авторизация»** (authorization), use the **IP and HTTP/HTTPS port** from that block as host and port; login and password are from your account (dashboard or the same letter). The «Список IP адресов» are the exit IPs (what the site sees); you connect to the auth IP and port. Example (replace `LOGIN` and `PASSWORD` with your credentials):
+If the provider sent you a letter with **«Авторизация»** (authorization), use the **IP and HTTP/HTTPS port** from that block as host and port; login and password are from your account (dashboard or the same letter). The «Список IP адресов» are the exit IPs (what the site sees); you connect to the auth IP and port. Example value in Settings (replace `LOGIN` and `PASSWORD` with your credentials):
 
-```env
-VFS_PROXY_URL=http://LOGIN:PASSWORD@82.27.201.74:59100
-```
+`VFS_PROXY_URL` = `http://LOGIN:PASSWORD@82.27.201.74:59100`
 
 Before first use, clear browser cache/cookies (or use a clean profile); the bot uses Puppeteer with a fresh profile, so no need to clean on the server for automated runs.
 

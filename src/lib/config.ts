@@ -23,11 +23,11 @@ export interface EnvConfig {
   vfsRateLimitBackoffSec: number;
   captcha2CaptchaApiKey?: string | null;
   captchaSolver?: null;
-  /** Geonix API key for fetching proxies (VFS cabinet from country-specific IP, e.g. Russia) */
+  /** Geonix API key — only from Settings sheet (not .env). */
   geonixApiKey?: string | null;
-  /** Country for VFS proxy when using Geonix (e.g. Russia). Ignored if vfsProxyUrl is set. */
+  /** VFS proxy country — only from Settings sheet (e.g. Russia). */
   vfsProxyCountry?: string | null;
-  /** Manual proxy URL for VFS (e.g. http://user:pass@host:port). Overrides Geonix when set. */
+  /** Manual VFS proxy URL — only from Settings sheet (overrides Geonix when set). */
   vfsProxyUrl?: string | null;
 }
 
@@ -53,9 +53,10 @@ export function getConfig(): EnvConfig {
     vfsRateLimitBackoffSec: Number(process.env.VFS_RATE_LIMIT_BACKOFF_SEC || 45),
     captcha2CaptchaApiKey: process.env.CAPTCHA_2CAPTCHA_API_KEY || null,
     captchaSolver: null,
-    geonixApiKey: process.env.GEONIX_API_KEY || null,
-    vfsProxyCountry: process.env.VFS_PROXY_COUNTRY || null,
-    vfsProxyUrl: process.env.VFS_PROXY_URL || null,
+    // Geonix/VFS proxy: only from Settings sheet (not .env)
+    geonixApiKey: undefined,
+    vfsProxyCountry: undefined,
+    vfsProxyUrl: undefined,
   };
 }
 

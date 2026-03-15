@@ -42,26 +42,16 @@ npm install
 
 ### Multi-User Mode (Recommended)
 
-Create a `.env` file in the project root. See [QUICKSTART.md](QUICKSTART.md) or [SETUP.md](SETUP.md) for complete setup instructions.
+Create a `.env` file in the project root with **only**:
 
-Required variables:
 ```env
 GOOGLE_SHEETS_ID=your_spreadsheet_id
 GOOGLE_CREDENTIALS_PATH=./credentials.json
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_MANAGER_CHAT_ID=your_chat_id
-FACILITY_ID=134
 ```
 
-Optional variables (with defaults):
-```env
-REFRESH_INTERVAL=3
-SHEETS_REFRESH_INTERVAL=300
-CACHE_TTL=60
-ROTATION_COOLDOWN=30
-```
+All other settings (Telegram, FACILITY_ID, intervals, VFS proxy, 2Captcha) go in the spreadsheet **Settings** sheet (key/value). See [QUICKSTART.md](QUICKSTART.md), [SETUP.md](SETUP.md), and [docs/SETTINGS_SHEET.md](docs/SETTINGS_SHEET.md).
 
-**Note:** For multi-user mode, user credentials (email, password, schedule_id, country_code) are stored in Google Sheets, not in `.env`.
+**Note:** User credentials (email, password, schedule_id, country_code) and the settings above are in Google Sheets, not in `.env`.
 
 ### Single-User Mode (Legacy)
 

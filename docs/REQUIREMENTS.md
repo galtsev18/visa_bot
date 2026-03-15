@@ -24,7 +24,7 @@
 - Интервалы: refresh, sheets refresh, cache TTL, rotation cooldown.
 - AIS: request delay, rate limit backoff.
 - Telegram: bot token, manager chat id.
-- Опционально: 2Captcha API key, facility_id. Источник: .env + переопределение из Settings.
+- Опционально: 2Captcha API key, facility_id, VFS proxy (Geonix). Источник: лист Settings (часть настроек можно задать в .env, они не перезатираются пустым из листа).
 
 ## 4. Утилиты и команды
 
