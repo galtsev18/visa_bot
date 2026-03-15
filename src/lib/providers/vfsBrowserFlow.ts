@@ -82,6 +82,9 @@ export async function vfsBrowserLogin(
   const headless = options.headless !== false;
   const loginUrl = `${VFS_BASE_URI}/${options.locale.replace(/^\/+|\/+$/g, '')}/login`;
   logger.info(`VFS browser: opening login URL: ${loginUrl}`);
+  if (!options.captchaApiKey?.trim()) {
+    logger.warn('VFS browser: CAPTCHA_2CAPTCHA_API_KEY not set (Settings sheet or .env). Cloudflare Turnstile will not be solved automatically.');
+  }
 
   type BrowserLike = { newPage(): Promise<PageLike>; close(): Promise<void> };
   type PageLike = {
@@ -142,6 +145,56 @@ export async function vfsBrowserLogin(
   );
   await page.setViewport({ width: 1280, height: 720 });
 
+  let captchaResolve: () => void;
+  let captchaReject: (err: unknown) => void;
+  const captchaDone = new Promise<void>((res, rej) => {
+    captchaResolve = res;
+    captchaReject = rej;
+  });
+
+  await page.evaluateOnNewDocument(TURNSTILE_INJECT_SCRIPT);
+  page.on('console', async (msg) => {
+    const text = msg.text();
+    if (!text.includes('intercepted-params:')) return;
+    try {
+      const json = text.replace('intercepted-params:', '').trim();
+      const params = JSON.parse(json) as {
+        sitekey: string;
+        pageurl: string;
+        data?: string;
+        pagedata?: string;
+        action?: string;
+      };
+      logger.info('VFS browser: Cloudflare Turnstile detected, solving...');
+      const token = options.captchaSolver
+        ? await options.captchaSolver({
+            type: 'turnstile',
+            siteKey: params.sitekey,
+            pageUrl: params.pageurl,
+          })
+        : (
+          await solveTurnstileChallengePage(
+            {
+              sitekey: params.sitekey,
+              pageurl: params.pageurl,
+              data: params.data,
+              pagedata: params.pagedata,
+              action: params.action,
+            },
+            { apiKey: options.captchaApiKey }
+          )
+        ).token;
+      await page.evaluate((t) => {
+        const w = window as unknown as { cfCallback?: (t: string) => void };
+        if (typeof w.cfCallback === 'function') w.cfCallback(t);
+      }, token);
+      captchaResolve!();
+    } catch (err) {
+      logger.error(`VFS browser: 2Captcha Turnstile failed: ${formatErrorForLog(err)}`);
+      captchaReject!(err);
+    }
+  });
+
   try {
     await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout });
 
@@ -164,12 +217,15 @@ export async function vfsBrowserLogin(
       // No cookie banner or different locale
     }
 
-    // Wait for login form: Angular Material (DE) uses #mat-input-0, #mat-input-1; others may use input[name=email]
+    // Give Cloudflare Turnstile time to render so our inject can hook it (if present)
+    await new Promise((r) => setTimeout(r, 3000));
+
+    // Wait for login form (after Cloudflare may have been solved); give time for Turnstile + redirect
     const emailSelector =
       '#mat-input-0, input[name="email"], input[type="email"], input[name="Email"]';
     const passwordSelector =
       '#mat-input-1, input[name="password"], input[type="password"], input[name="Password"]';
-    const formTimeout = options.formTimeout ?? 25000;
+    const formTimeout = options.formTimeout ?? 60000;
     try {
       await page.waitForSelector(`${emailSelector}, ${passwordSelector}`, { timeout: formTimeout });
     } catch (formErr) {
@@ -189,57 +245,6 @@ export async function vfsBrowserLogin(
 
     await page.type(emailSelector, options.email, { delay: 50 });
     await page.type(passwordSelector, options.password, { delay: 50 });
-
-    // Turnstile / captcha: intercept and solve if present
-    let captchaResolve: () => void;
-    let captchaReject: (err: unknown) => void;
-    const captchaDone = new Promise<void>((res, rej) => {
-      captchaResolve = res;
-      captchaReject = rej;
-    });
-
-    await page.evaluateOnNewDocument(TURNSTILE_INJECT_SCRIPT);
-
-    page.on('console', async (msg) => {
-      const text = msg.text();
-      if (!text.includes('intercepted-params:')) return;
-      try {
-        const json = text.replace('intercepted-params:', '').trim();
-        const params = JSON.parse(json) as {
-          sitekey: string;
-          pageurl: string;
-          data?: string;
-          pagedata?: string;
-          action?: string;
-        };
-        const token = options.captchaSolver
-          ? await options.captchaSolver({
-              type: 'turnstile',
-              siteKey: params.sitekey,
-              pageUrl: params.pageurl,
-            })
-          : (
-            await solveTurnstileChallengePage(
-              {
-                sitekey: params.sitekey,
-                pageurl: params.pageurl,
-                data: params.data,
-                pagedata: params.pagedata,
-                action: params.action,
-              },
-              { apiKey: options.captchaApiKey }
-            )
-          ).token;
-        await page.evaluate((t) => {
-          const w = window as unknown as { cfCallback?: (t: string) => void };
-          if (typeof w.cfCallback === 'function') w.cfCallback(t);
-        }, token);
-        captchaResolve!();
-      } catch (err) {
-        logger.error(`VFS browser: 2Captcha Turnstile failed: ${formatErrorForLog(err)}`);
-        captchaReject!(err);
-      }
-    });
 
     // Click Sign In — ranjan: get_by_role("button", name="Sign In")
     const signInClicked = await page.evaluate(() => {
