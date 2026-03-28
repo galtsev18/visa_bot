@@ -4,7 +4,7 @@ C4, DFD и sequence-диаграммы в формате Mermaid. Рендер: 
 
 Связано: [ARCHITECTURE.md](ARCHITECTURE.md) · [CONTRACTS.md](CONTRACTS.md) · [ADR](adr/README.md).
 
-**Актуальность:** диаграммы соответствуют текущей архитектуре: Node 18+, встроенный fetch; доступ к Google Sheets — через `lib/sheets.ts` (доменный API: Users, Cache, Logs, Settings) и `lib/sheetsClientCore.ts` (низкоуровневый get/batchGet/update/append + quota retry); уведомления о квотах через `repo.setQuotaNotifier()`; Telegram через `TelegramNotificationAdapter`; composition root `createMonitorContext` с опциональными `opts.repo` и `opts.notifications` для тестов. Запуск: `npm start -- monitor` / `npm start -- bot`.
+**Актуальность:** диаграммы соответствуют текущей архитектуре: Node 20+ (см. `engines`), встроенный fetch; доступ к Google Sheets — через `lib/sheets.ts` (доменный API: Users, Cache, Logs, Settings) и `lib/sheetsClientCore.ts` (низкоуровневый get/batchGet/update/append + quota retry); уведомления о квотах через `repo.setQuotaNotifier()`; Telegram через `TelegramNotificationAdapter`; composition root `createMonitorContext` с опциональными `opts.repo` и `opts.notifications` для тестов. Запуск: `npm start -- monitor` / `npm start -- bot`.
 
 ---
 

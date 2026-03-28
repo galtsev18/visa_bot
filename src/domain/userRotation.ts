@@ -4,6 +4,26 @@
  */
 import type { User } from '../ports/User';
 
+/** True if user is monitored via VFS Global (sheet "VFS users"). */
+export function isVfsProviderUser(user: User): boolean {
+  return (user.provider || '').toLowerCase() === 'vfsglobal';
+}
+
+/**
+ * Drops users for sources that are paused via Settings (checkboxes PAUSE_US_ROTATION / PAUSE_VFS_ROTATION).
+ * Used so rotation and bot initialization only touch enabled sources.
+ */
+export function filterUsersForRotation(
+  users: User[],
+  pauseUsRotation: boolean | undefined,
+  pauseVfsRotation: boolean | undefined
+): User[] {
+  return users.filter((u) => {
+    if (isVfsProviderUser(u)) return !pauseVfsRotation;
+    return !pauseUsRotation;
+  });
+}
+
 export function getNextUser(users: User[], cooldown = 30): User | null {
   if (!users || users.length === 0) return null;
 

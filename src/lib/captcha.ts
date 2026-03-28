@@ -280,3 +280,44 @@ export async function solveTurnstileChallengePage(
   }
   throw new Error('Turnstile solve timeout');
 }
+
+export type CaptchaBalanceResult =
+  | { ok: true; balanceUsd: string }
+  | { ok: false; error: string };
+
+/**
+ * Live account balance (USD) via 2Captcha API.
+ * @see https://2captcha.com/2captcha-api#balance
+ */
+export async function fetch2CaptchaBalance(apiKey: string): Promise<CaptchaBalanceResult> {
+  const key = apiKey?.trim();
+  if (!key) return { ok: false, error: 'empty key' };
+
+  const url = `https://2captcha.com/res.php?${new URLSearchParams({
+    key,
+    action: 'getbalance',
+    json: '1',
+  })}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    const text = await res.text();
+    let data: { status?: number; request?: string };
+    try {
+      data = JSON.parse(text) as { status?: number; request?: string };
+    } catch {
+      return { ok: false, error: text.trim().slice(0, 120) || `HTTP ${res.status}` };
+    }
+    if (data.status === 1 && data.request != null) {
+      return { ok: true, balanceUsd: String(data.request).trim() };
+    }
+    return { ok: false, error: data.request ?? `HTTP ${res.status}` };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: /aborted/i.test(msg) ? 'timeout' : msg };
+  } finally {
+    clearTimeout(timer);
+  }
+}

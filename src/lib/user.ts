@@ -33,8 +33,12 @@ export function createUser(data: RawUserInput): User {
   const rangesRaw =
     typeof data.date_ranges === 'string'
       ? (() => {
+          const trimmed = data.date_ranges.trim();
+          if (trimmed === '') {
+            return [];
+          }
           try {
-            return JSON.parse(data.date_ranges) as Array<{ from?: string; to?: string }>;
+            return JSON.parse(trimmed) as Array<{ from?: string; to?: string }>;
           } catch (e: unknown) {
             console.error(`Failed to parse date ranges for user ${data.email}:`, formatErrorForLog(e));
             return [];

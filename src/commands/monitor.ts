@@ -1,7 +1,9 @@
 import { createMonitorContext } from '../composition/createMonitorContext';
 import { UserBotManager } from '../lib/userBotManager';
 import { logger } from '../lib/logger';
+import { formatMonitorProcessStarted } from '../lib/telegram';
 import { isSocketHangupError, formatErrorForLog } from '../lib/utils';
+import { pollUntilActiveUsersFromSheets } from './pollUntilActiveUsers';
 
 const COOLDOWN = 3600; // 1 hour in seconds
 /** Minimum interval between "quota exceeded" Telegram messages (ms). */
@@ -19,7 +21,8 @@ export async function monitorCommand(options: MonitorCommandOptions = {}): Promi
       sheetsRefresh: options.sheetsRefresh ? Number(options.sheetsRefresh) : undefined,
     });
 
-    const { config, users, cacheEntries, repo, dateCache, notifications } = ctx;
+    const { config, repo, dateCache, notifications } = ctx;
+    let { users, cacheEntries } = ctx;
     const managerDeps = { repo, dateCache, notifications };
 
     let lastQuotaExceededSent = 0;
@@ -44,12 +47,24 @@ export async function monitorCommand(options: MonitorCommandOptions = {}): Promi
     logger.info(`Cache TTL: ${config.cacheTtl}s`);
     logger.info(`Rotation cooldown: ${config.rotationCooldown}s`);
 
-    if (users.length === 0) {
-      logger.info('No active users found in Google Sheets');
-      process.exit(1);
-    }
+    const polled = await pollUntilActiveUsersFromSheets(config, repo, dateCache, {
+      users,
+      cacheEntries,
+    });
+    users = polled.users;
+    cacheEntries = polled.cacheEntries;
 
     logger.info(`Found ${users.length} active users`);
+
+    const chatId = String(config.telegramManagerChatId ?? '').trim();
+    if (chatId) {
+      const earlyOk = await notifications.send(formatMonitorProcessStarted(users.length), chatId);
+      if (!earlyOk) {
+        logger.warn(
+          'Telegram: "process started" notification was not delivered (check token, chat_id, journal for Telegram send errors)'
+        );
+      }
+    }
 
     const manager = new UserBotManager(config, managerDeps);
     await manager.initializeUsers(users);
@@ -63,10 +78,10 @@ export async function monitorCommand(options: MonitorCommandOptions = {}): Promi
       await new Promise((resolve) => setTimeout(resolve, COOLDOWN * 1000));
       return monitorCommand(options);
     } else {
-      logger.error({ err }, `Error: ${errMsg}`);
-      const e = err as { stack?: string };
-      if (process.env.NODE_ENV !== 'production' && e?.stack) {
-        logger.debug({ stack: e.stack }, 'Stack trace');
+      const stack = err instanceof Error ? err.stack : undefined;
+      logger.error({ err, stack }, `Error: ${errMsg}`);
+      if (process.env.NODE_ENV !== 'production' && stack) {
+        logger.debug({ stack }, 'Stack trace');
       }
       process.exit(1);
     }

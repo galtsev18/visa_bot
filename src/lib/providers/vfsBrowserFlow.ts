@@ -147,10 +147,17 @@ export async function vfsBrowserLogin(
 
   let captchaResolve: () => void;
   let captchaReject: (err: unknown) => void;
+  /** Set when Turnstile/2Captcha fails (for clearer errors vs form timeout). */
+  let captchaFailure: unknown = undefined;
   const captchaDone = new Promise<void>((res, rej) => {
     captchaResolve = res;
-    captchaReject = rej;
+    captchaReject = (err: unknown) => {
+      captchaFailure = err;
+      rej(err);
+    };
   });
+  // If Turnstile fails before Promise.race below, without this Node reports unhandledRejection → process.exit(1) in index.ts.
+  void captchaDone.catch(() => {});
 
   await page.evaluateOnNewDocument(TURNSTILE_INJECT_SCRIPT);
   page.on('console', async (msg) => {
@@ -229,6 +236,11 @@ export async function vfsBrowserLogin(
     try {
       await page.waitForSelector(`${emailSelector}, ${passwordSelector}`, { timeout: formTimeout });
     } catch (formErr) {
+      if (captchaFailure !== undefined) {
+        throw captchaFailure instanceof Error
+          ? captchaFailure
+          : new Error(String(captchaFailure));
+      }
       try {
         const { writeFile, mkdir } = await import('fs/promises');
         const { join } = await import('path');
@@ -241,6 +253,12 @@ export async function vfsBrowserLogin(
         // ignore screenshot errors
       }
       throw formErr;
+    }
+
+    if (captchaFailure !== undefined) {
+      throw captchaFailure instanceof Error
+        ? captchaFailure
+        : new Error(String(captchaFailure));
     }
 
     await page.type(emailSelector, options.email, { delay: 50 });

@@ -14,6 +14,7 @@
  */
 import { logger } from './logger';
 import { formatErrorForLog } from './utils';
+import { defaultDateRangesJson } from './dateParser';
 import { createUser, User } from './user';
 import {
   createSheetsClientCore,
@@ -395,9 +396,21 @@ export function setSheetsQuotaNotifier(fn: (event: 'exceeded' | 'resolved') => v
 }
 
 // ------------ 5. Domain: Settings ------------
+/** Checkbox / TRUE-FALSE from Settings sheet (and Google Sheets boolean cells). */
+function parseSettingsBoolean(raw: unknown): boolean {
+  if (raw === true || raw === 1) return true;
+  if (raw === false || raw === 0) return false;
+  const s = String(raw ?? '')
+    .trim()
+    .toUpperCase();
+  if (s === '' || s === 'FALSE' || s === '0' || s === 'NO') return false;
+  if (s === 'TRUE' || s === '1' || s === 'YES') return true;
+  return false;
+}
+
 const SETTINGS_KEY_MAP: Record<
   string,
-  { configKey: string; number: boolean }
+  { configKey: string; number: boolean; isBoolean?: boolean }
 > = {
   AIS_REQUEST_DELAY_SEC: { configKey: 'aisRequestDelaySec', number: true },
   AIS_RATE_LIMIT_BACKOFF_SEC: { configKey: 'aisRateLimitBackoffSec', number: true },
@@ -414,6 +427,8 @@ const SETTINGS_KEY_MAP: Record<
   GEONIX_API_KEY: { configKey: 'geonixApiKey', number: false },
   VFS_PROXY_COUNTRY: { configKey: 'vfsProxyCountry', number: false },
   VFS_PROXY_URL: { configKey: 'vfsProxyUrl', number: false },
+  PAUSE_US_ROTATION: { configKey: 'pauseUsRotation', number: false, isBoolean: true },
+  PAUSE_VFS_ROTATION: { configKey: 'pauseVfsRotation', number: false, isBoolean: true },
 };
 
 const SETTINGS_DEFAULT_VALUES: Record<string, string> = {
@@ -432,6 +447,8 @@ const SETTINGS_DEFAULT_VALUES: Record<string, string> = {
   GEONIX_API_KEY: '',
   VFS_PROXY_COUNTRY: 'Russia',
   VFS_PROXY_URL: '',
+  PAUSE_US_ROTATION: 'FALSE',
+  PAUSE_VFS_ROTATION: 'FALSE',
 };
 
 /** Ключи таймингов, которые записываются командой update-settings-timings. */
@@ -516,6 +533,10 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
       for (const k of missingKeys) {
         const mapping = SETTINGS_KEY_MAP[k];
         const raw = valueToWrite(k);
+        if (mapping.isBoolean) {
+          overrides[mapping.configKey] = parseSettingsBoolean(raw);
+          continue;
+        }
         const value = mapping.number ? Number(raw) : raw != null ? String(raw).trim() : '';
         if (!mapping.number || (!Number.isNaN(value as number) && value !== undefined)) {
           overrides[mapping.configKey] = value;
@@ -550,6 +571,10 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
           values: [[fromEnv]],
         });
       }
+      if (mapping.isBoolean) {
+        overrides[mapping.configKey] = parseSettingsBoolean(raw);
+        continue;
+      }
       const value = mapping.number ? Number(raw) : raw != null ? String(raw).trim() : '';
       if (mapping.number && (value === undefined || Number.isNaN(value as number))) continue;
       overrides[mapping.configKey] = value;
@@ -569,14 +594,35 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
 }
 
 // ------------ 5. Domain: Users ------------
+interface DateRangeSheetFix {
+  sheetName: UsersSheetName;
+  row: number;
+  colLetter: string;
+  value: string;
+}
+
+async function flushDateRangeFixes(
+  s: SheetsClientState,
+  fixes: DateRangeSheetFix[]
+): Promise<void> {
+  if (fixes.length === 0) return;
+  const updates = fixes.map((f) => ({
+    range: sheetRange(f.sheetName, `${f.colLetter}${f.row}`),
+    values: [[f.value]] as (string | number)[][],
+  }));
+  await s.core.batchUpdate(updates, 'RAW');
+  logger.info(`Sheets: wrote default date_ranges for ${fixes.length} user row(s)`);
+}
+
 function parseUsersFromSheet(
   rows: (string | number)[][],
   sheetName: UsersSheetName,
   defaultProvider: 'ais' | 'vfs',
   s: SheetsClientState
-): User[] {
+): { users: User[]; dateRangeFixes: DateRangeSheetFix[] } {
   const users: User[] = [];
-  if (!rows || rows.length < 2) return users;
+  const dateRangeFixes: DateRangeSheetFix[] = [];
+  if (!rows || rows.length < 2) return { users, dateRangeFixes };
   const headers = rows[0].map((h) => String(h).toLowerCase().replace(/\s+/g, '_'));
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
@@ -591,6 +637,31 @@ function parseUsersFromSheet(
       continue;
     try {
       const oneBasedRow = i + 1;
+      const drIdx = headers.indexOf('date_ranges');
+      if (drIdx >= 0) {
+        const raw = userData.date_ranges;
+        const str = raw != null ? String(raw).trim() : '';
+        let needFix = false;
+        if (str === '') {
+          needFix = true;
+        } else {
+          try {
+            JSON.parse(str);
+          } catch {
+            needFix = true;
+          }
+        }
+        if (needFix) {
+          const json = defaultDateRangesJson();
+          userData.date_ranges = json;
+          dateRangeFixes.push({
+            sheetName,
+            row: oneBasedRow,
+            colLetter: columnIndexToLetter(drIdx),
+            value: json,
+          });
+        }
+      }
       (userData as Record<string, unknown>).rowIndex = oneBasedRow;
       const user = createUser(userData);
       users.push(user);
@@ -600,7 +671,7 @@ function parseUsersFromSheet(
       logger.error(`Failed to parse user ${userData.email}: ${formatErrorForLog(error)}`);
     }
   }
-  return users;
+  return { users, dateRangeFixes };
 }
 
 async function readUsersImpl(s: SheetsClientState): Promise<User[]> {
@@ -618,11 +689,14 @@ async function readUsersImpl(s: SheetsClientState): Promise<User[]> {
     if (usRows.length >= 2) s.usUsersHeaderCache = usRows[0].map(String);
     if (vfsRows.length >= 2) s.vfsUsersHeaderCache = vfsRows[0].map(String);
 
-    const usUsers = parseUsersFromSheet(usRows, SHEET_US_USERS, 'ais', s);
-    const vfsUsers = parseUsersFromSheet(vfsRows, SHEET_VFS_USERS, 'vfs', s);
-    const users = [...usUsers, ...vfsUsers];
+    const usParsed = parseUsersFromSheet(usRows, SHEET_US_USERS, 'ais', s);
+    const vfsParsed = parseUsersFromSheet(vfsRows, SHEET_VFS_USERS, 'vfs', s);
+    const users = [...usParsed.users, ...vfsParsed.users];
+    await flushDateRangeFixes(s, [...usParsed.dateRangeFixes, ...vfsParsed.dateRangeFixes]);
 
-    logger.info(`Read ${users.length} active users from Google Sheets (US: ${usUsers.length}, VFS: ${vfsUsers.length})`);
+    logger.info(
+      `Read ${users.length} active users from Google Sheets (US: ${usParsed.users.length}, VFS: ${vfsParsed.users.length})`
+    );
     return users;
   } catch (error) {
     logger.error(`Failed to read users from Google Sheets: ${formatErrorForLog(error)}`);
@@ -651,9 +725,10 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
 
     if (usRows.length >= 2) s.usUsersHeaderCache = usRows[0].map(String);
     if (vfsRows.length >= 2) s.vfsUsersHeaderCache = vfsRows[0].map(String);
-    const usUsers = parseUsersFromSheet(usRows, SHEET_US_USERS, 'ais', s);
-    const vfsUsers = parseUsersFromSheet(vfsRows, SHEET_VFS_USERS, 'vfs', s);
-    const users = [...usUsers, ...vfsUsers];
+    const usParsed = parseUsersFromSheet(usRows, SHEET_US_USERS, 'ais', s);
+    const vfsParsed = parseUsersFromSheet(vfsRows, SHEET_VFS_USERS, 'vfs', s);
+    const users = [...usParsed.users, ...vfsParsed.users];
+    await flushDateRangeFixes(s, [...usParsed.dateRangeFixes, ...vfsParsed.dateRangeFixes]);
 
     const cacheEntries: CacheEntryFromSheet[] = [];
     if (cacheRows.length >= 2) {

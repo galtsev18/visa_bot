@@ -21,7 +21,7 @@ The bot logs into your account on https://ais.usvisa-info.com/ and checks for av
 
 ## Prerequisites
 
-- Node.js 18+ 
+- Node.js 20+ 
 - A valid US visa interview appointment
 - Access to https://ais.usvisa-info.com/
 

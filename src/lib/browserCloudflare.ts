@@ -120,6 +120,7 @@ export async function passCloudflareWithBrowser(
         captchaResolve = res;
         captchaReject = rej;
       });
+      void captchaDone.catch(() => {});
 
       await page.evaluateOnNewDocument(TURNSTILE_INJECT_SCRIPT);
 

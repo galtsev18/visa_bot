@@ -38,4 +38,9 @@ export interface AppConfig {
   geonixApiKey?: string | null;
   vfsProxyCountry?: string | null;
   vfsProxyUrl?: string | null;
+
+  /** Settings sheet checkbox: when true, US (AIS) accounts are excluded from rotation and not logged in. */
+  pauseUsRotation?: boolean;
+  /** Settings sheet checkbox: when true, VFS accounts are excluded from rotation and not logged in. */
+  pauseVfsRotation?: boolean;
 }

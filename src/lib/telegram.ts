@@ -172,7 +172,22 @@ export function formatBookingSuccessWithDetails(
 }
 
 /**
- * Format "Monitor started" notification
+ * Sent as soon as the monitor process has users from Sheets, **before** long-running `initializeUsers`
+ * (VFS browser login etc.). Explains why "Monitor Started" may arrive minutes later.
+ */
+export function formatMonitorProcessStarted(userCount: number): string {
+  return `
+<b>🚀 Monitor process started</b>
+
+<b>Active users:</b> ${userCount}
+Initializing sessions (logins can take several minutes). A second message <b>Monitor Started</b> with cache stats arrives when the first loop iteration begins.
+
+<b>Time:</b> ${new Date().toLocaleString()}
+  `.trim();
+}
+
+/**
+ * Format "Monitor started" notification (first monitoring loop iteration — after bot sessions are ready).
  */
 export function formatMonitorStarted(
   users: unknown[],
@@ -190,31 +205,60 @@ export function formatMonitorStarted(
   `.trim();
 }
 
+function escapeTelegramHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 export interface DailyStatsForReport {
   activeUsersCount: number;
   dailySlotsMissed: number;
   dailyBookings: number;
   dailyErrorCounts: Record<string, number>;
+  /** Суммарно с момента записи метрик в файл (между перезапусками накапливается). */
+  checksTotal?: number;
+  bookingsTotal?: number;
+  /** Текущий баланс 2Captcha (USD), если ключ задан и API ответил. */
+  captchaBalanceUsd?: string;
+  /** Текст ошибки запроса баланса 2Captcha. */
+  captchaBalanceError?: string;
 }
 
 /**
- * Формат ежедневного отчёта (10:00): активные пользователи, слоты не записались / записались, ошибки.
+ * Формат ежедневного отчёта (10:00): активные пользователи, слоты не записались / записались, ошибки, баланс 2Captcha.
  */
 export function formatDailyStatsReport(stats: DailyStatsForReport): string {
   const errors =
     Object.keys(stats.dailyErrorCounts).length === 0
       ? 'Нет'
       : Object.entries(stats.dailyErrorCounts)
-          .map(([msg, count]) => `• ${count}× ${msg.slice(0, 80)}${msg.length > 80 ? '…' : ''}`)
+          .map(([msg, count]) => `• ${count}× ${escapeTelegramHtml(msg.slice(0, 80))}${msg.length > 80 ? '…' : ''}`)
           .join('\n');
+
+  const captchaLine =
+    stats.captchaBalanceUsd !== undefined
+      ? `<b>2Captcha баланс (USD):</b> ${escapeTelegramHtml(stats.captchaBalanceUsd)}`
+      : stats.captchaBalanceError !== undefined
+        ? `<b>2Captcha баланс:</b> не удалось — ${escapeTelegramHtml(stats.captchaBalanceError)}`
+        : `<b>2Captcha баланс:</b> ключ не задан (CAPTCHA_2CAPTCHA_API_KEY в Settings / .env)`;
+
+  const totals =
+    stats.checksTotal !== undefined || stats.bookingsTotal !== undefined
+      ? `
+<b>Всего проверок (метрики):</b> ${stats.checksTotal ?? '—'}
+<b>Всего успешных записей (метрики):</b> ${stats.bookingsTotal ?? '—'}`
+      : '';
+
   return `
-<b>📊 Статистика за сутки</b>
+<b>📊 Ежедневный отчёт</b>
+
+${captchaLine}
+${totals}
 
 <b>Активных пользователей:</b> ${stats.activeUsersCount}
-<b>Подходящих слотов, на которые не успели записаться:</b> ${stats.dailySlotsMissed}
-<b>Успешно записались:</b> ${stats.dailyBookings}
+<b>Подходящих слотов, на которые не успели записаться (за сутки):</b> ${stats.dailySlotsMissed}
+<b>Успешно записались (за сутки):</b> ${stats.dailyBookings}
 
-<b>Ошибки (агрегировано):</b>
+<b>Ошибки (агрегировано за сутки):</b>
 ${errors}
 
 <b>Время отчёта:</b> ${new Date().toLocaleString()}

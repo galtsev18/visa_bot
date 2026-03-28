@@ -1,0 +1,12 @@
+---
+description: Production server for deploy/restart of this bot (not 1cbuh)
+alwaysApply: true
+---
+
+# Deploy target
+
+- **SSH:** `root@82.27.201.74`
+- **App path (per DEPLOY.md):** `/opt/us-visa-bot`
+- **Restart:** `ssh root@82.27.201.74 "cd /opt/us-visa-bot && npm install --omit=dev && systemctl restart us-visa-bot"` (adjust if service name/path differs). Server should run **Node 20+** to avoid `EBADENGINE` warnings (`nodesource` setup_20.x in DEPLOY.md).
+- **Deploy:** prefer **`deploy/deploy-to-server.ps1` from PowerShell** when `ssh root@82.27.201.74` works there (Windows OpenSSH, `%USERPROFILE%\.ssh`). Fallback: `deploy/deploy-to-server.sh` on WSL/Linux if the key is only under Linux `~/.ssh`.
+- Do **not** use `1cbuh.igasdetection.com` for this project — that host is unrelated.

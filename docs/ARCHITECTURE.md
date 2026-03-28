@@ -10,9 +10,9 @@
 
 ### 1.1 Зависимости
 
-- **Runtime:** Node.js 18+, ESM (`engines.node` в package.json)
+- **Runtime:** Node.js 20+, ESM (`engines.node` в package.json)
 - **CLI:** Commander
-- **HTTP:** встроенный `fetch` (Node 18+), без node-fetch
+- **HTTP:** встроенный `fetch` (Node 18+), без node-fetch; в проде ориентир — Node 20+ (см. `engines`)
 - **Парсинг:** cheerio, chrono-node
 - **Интеграции:** googleapis (Sheets), Telegram Bot API (fetch к api.telegram.org)
 - **Логирование:** pino (`LOG_LEVEL`)
@@ -27,6 +27,7 @@ src/
 ├── index.ts                    # CLI: команды и роутинг
 ├── commands/
 │   ├── monitor.ts              # Multi-user: только composition root → UserBotManager (deps обязательны)
+│   ├── pollUntilActiveUsers.ts # Опрос Sheets, пока не появится active user (без exit(1) под systemd)
 │   ├── bot.ts                   # Single-user (legacy)
 │   ├── health.ts                # Метрики и проверка работы
 │   ├── get-chat-id.ts

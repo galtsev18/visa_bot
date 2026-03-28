@@ -17,6 +17,8 @@
 | AIS_RATE_LIMIT_BACKOFF_SEC | 30 | бэкофф при лимите AIS |
 | VFS_REQUEST_DELAY_SEC | 3 | задержка для VFS |
 | VFS_RATE_LIMIT_BACKOFF_SEC | 45 | бэкофф для VFS |
+| **PAUSE_US_ROTATION** | **FALSE** | **чекбокс:** **TRUE** — не крутить ротацию и не логинить учётки **US (AIS)** |
+| **PAUSE_VFS_ROTATION** | **FALSE** | **чекбокс:** **TRUE** — не крутить ротацию и не логинить учётки **VFS** |
 | CAPTCHA_2CAPTCHA_API_KEY | ключ 2Captcha | опционально, для капчи VFS |
 | **GEONIX_API_KEY** | **API-ключ Geonix** | **только в таблице, не в .env** — https://geonix.com/personal/api/ |
 | **VFS_PROXY_COUNTRY** | **Russia** | **только в таблице** — страна прокси для VFS (если используете Geonix) |

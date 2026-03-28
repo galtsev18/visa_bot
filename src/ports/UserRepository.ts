@@ -15,6 +15,8 @@ export interface SettingsOverrides {
   aisRequestDelaySec?: number;
   aisRateLimitBackoffSec?: number;
   captcha2CaptchaApiKey?: string;
+  pauseUsRotation?: boolean;
+  pauseVfsRotation?: boolean;
 }
 
 /**

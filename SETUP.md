@@ -4,7 +4,7 @@ This guide will help you set up the multi-user visa bot system step by step.
 
 ## Prerequisites
 
-- Node.js 18+ installed
+- Node.js 20+ installed
 - A Google account
 - A Telegram account
 - Access to https://ais.usvisa-info.com/
@@ -47,7 +47,7 @@ The bot will automatically create headers when it runs (for a new empty sheet). 
 | facility_id | AIS | (Optional) Facility ID; overrides global config when set |
 | current_date | both | Current booked appointment date (YYYY-MM-DD) |
 | reaction_time | both | Min days from today before accepting a slot (integer) |
-| date_ranges | both | JSON array of acceptable date ranges |
+| date_ranges | both | JSON array of acceptable date ranges; if the cell is empty or invalid JSON, the bot writes a default wide range on the next sync |
 | active | both | TRUE = monitor this user, FALSE = skip |
 | last_checked | both | (Filled by bot) Last check timestamp |
 | last_booked | both | (Filled by bot) Last successful booking date |
@@ -210,7 +210,7 @@ When a booking is successful, you should receive a Telegram message to the chat 
 
 ### Date parsing errors
 - Use digital format: "2024-06-01" (recommended) or human-readable: "June 1, 2024"
-- Ensure JSON is valid in date_ranges column
+- Ensure JSON is valid in date_ranges column (or leave empty: the bot will fill a default range automatically)
 - Check date format examples in this guide
 
 ## Next Steps

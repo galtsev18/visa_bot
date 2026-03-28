@@ -1,4 +1,5 @@
 import type { NotificationSender } from '../ports/NotificationSender';
+import { logger } from '../lib/logger';
 
 /**
  * Wraps a NotificationSender and thins out consecutive identical messages:
@@ -41,7 +42,12 @@ export class ThrottledNotificationSender implements NotificationSender {
         if (sameAsPending) {
           this.pendingCount++;
           const text = this.formatWithCount(this.pendingText, this.pendingCount);
-          await this.inner.send(text, chatId);
+          const ok = await this.inner.send(text, chatId);
+          if (!ok) {
+            logger.warn(
+              'ThrottledNotificationSender: underlying send returned false (Telegram may have rejected the message)'
+            );
+          }
           this.lastSendTime = Date.now();
           this.pendingCount = 1;
           this.scheduleFlush();
@@ -49,12 +55,14 @@ export class ThrottledNotificationSender implements NotificationSender {
         }
         await this.doFlush();
       }
-      await this.inner.send(message, chatId);
+      const ok = await this.inner.send(message, chatId);
+      if (!ok) {
+        logger.warn(
+          'ThrottledNotificationSender: underlying send returned false (Telegram may have rejected the message)'
+        );
+      }
       this.lastSendTime = Date.now();
-      this.pendingText = message;
-      this.pendingChatId = chatId;
-      this.pendingCount = 1;
-      this.scheduleFlush();
+      // Do not set pending + scheduleFlush here: that caused a duplicate send of the same text after cooldownMs.
       return true;
     }
 
@@ -94,7 +102,12 @@ export class ThrottledNotificationSender implements NotificationSender {
     this.pendingText = null;
     this.pendingChatId = '';
     this.pendingCount = 0;
-    await this.inner.send(text, chatId);
+    const ok = await this.inner.send(text, chatId);
+    if (!ok) {
+      logger.warn(
+        'ThrottledNotificationSender: flush send returned false (Telegram may have rejected the message)'
+      );
+    }
     this.lastSendTime = Date.now();
   }
 

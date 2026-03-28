@@ -5,7 +5,7 @@ The bot runs as a **systemd service**: it starts on boot and restarts automatica
 ## 1. Server requirements
 
 - Linux (Debian/Ubuntu or similar)
-- Node.js 18+ and npm
+- Node.js **20+** and npm (`package.json` `engines.node`; dependencies such as `commander` expect Node 20+)
 - `.env` (only GOOGLE_SHEETS_ID and GOOGLE_CREDENTIALS_PATH) and `credentials.json` on the server; other settings in the spreadsheet **Settings** sheet
 
 ## 2. One-time setup on the server (as root)
@@ -18,7 +18,7 @@ SSH in:
 ssh root@YOUR_SERVER_IP
 ```
 
-### 2.1 Install Node.js 18+ (run these one at a time)
+### 2.1 Install Node.js 20 LTS (run these one at a time)
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -33,6 +33,8 @@ node -v
 ```
 
 You should see v20.x. If `node` or `npm` is not found, the install didn’t complete.
+
+If the server was previously on **Node 18**, run the same `setup_20.x` + `apt-get install -y nodejs` steps so `node -v` is **v20.x** — this removes `npm WARN EBADENGINE` (dependencies such as `commander` expect Node 20+).
 
 ### 2.2 Create app directory and copy project
 
@@ -72,7 +74,7 @@ cd /opt/us-visa-bot
 ```
 
 ```bash
-npm install --production
+npm install --omit=dev
 ```
 
 Create `.env` if you didn’t copy it:
@@ -166,14 +168,26 @@ journalctl -u us-visa-bot -f
 | Live logs           | `journalctl -u us-visa-bot -f` |
 | Last 100 lines      | `journalctl -u us-visa-bot -n 100` |
 
+### Monitor: empty sheet or no active users
+
+If **US_users** / **VFS users** have no rows with **active=TRUE**, the process **does not exit with an error** (that used to make systemd restart in a loop). The bot **waits** and re-reads Sheets every **min(SHEETS_REFRESH_INTERVAL, 120)** seconds until at least one active user appears, then starts the normal rotation.
+
+If the service still shows **`activating (auto-restart)`** or **`status=1/FAILURE`**, check logs: `journalctl -u us-visa-bot -n 80 --no-pager` — typical causes: missing **TELEGRAM_*** or sheets creds in **Settings** / `.env`, bad **`credentials.json`**, or Google API errors.
+
 ## 4. Updating the bot
 
 From your PC, copy updated code (e.g. after git pull or local changes):
 
 ```bash
 scp -r src package.json package-lock.json tsconfig.json root@YOUR_SERVER_IP:/opt/us-visa-bot/
-ssh root@YOUR_SERVER_IP "cd /opt/us-visa-bot && npm install --production && systemctl restart us-visa-bot"
+ssh root@YOUR_SERVER_IP "cd /opt/us-visa-bot && npm install --omit=dev && systemctl restart us-visa-bot"
 ```
+
+**Windows (PowerShell, from repo root):** `.\deploy\deploy-to-server.ps1` — same steps; optional `-Server root@OTHER_IP`. Does not overwrite `credentials.json` or `.env` on the server. Use this when your usual `ssh` to the server works from PowerShell (Windows OpenSSH).
+
+**WSL (if the SSH key is only in Linux `~/.ssh`):** from repo root, `bash deploy/deploy-to-server.sh` (or `wsl -e bash -lc "cd .../us-visa-bot && bash deploy/deploy-to-server.sh"` from PowerShell).
+
+Agent skill (Cursor): `.cursor/skills/deploy-us-visa-bot/SKILL.md`.
 
 ## 5. Optional: run as a dedicated user (not root)
 

@@ -1,7 +1,11 @@
 import { Bot } from './bot';
 import { createVisaProvider } from '../adapters/VisaProviderFactory';
 import { ProviderBackedClient } from '../adapters/ProviderBackedClient';
-import { getNextUser, updateUserPriority } from '../domain/userRotation';
+import {
+  filterUsersForRotation,
+  getNextUser,
+  updateUserPriority,
+} from '../domain/userRotation';
 import {
   formatBookingSuccessWithDetails,
   formatSlotFound,
@@ -30,6 +34,7 @@ import type { NotificationSender } from '../ports/NotificationSender';
 import type { User } from '../ports/User';
 import { resolveVfsProxy } from './geonixProxy';
 import { localeFromLoginUrl } from './vfsUtils';
+import { fetch2CaptchaBalance } from './captcha';
 
 export interface ManagerDeps {
   repo: UserRepository;
@@ -54,6 +59,8 @@ export interface AppConfigLike {
   geonixApiKey?: string | null;
   vfsProxyCountry?: string | null;
   vfsProxyUrl?: string | null;
+  pauseUsRotation?: boolean;
+  pauseVfsRotation?: boolean;
 }
 
 export class UserBotManager {
@@ -80,13 +87,21 @@ export class UserBotManager {
   }
 
   async initializeUsers(users: User[]): Promise<void> {
-    this.users = users;
+    const pauseUs = !!this.config.pauseUsRotation;
+    const pauseVfs = !!this.config.pauseVfsRotation;
+    const eligible = filterUsersForRotation(users, pauseUs, pauseVfs);
+    if (eligible.length < users.length) {
+      logger.info(
+        `Rotation pause: ${users.length - eligible.length} user(s) skipped (US paused: ${pauseUs}, VFS paused: ${pauseVfs})`
+      );
+    }
+    this.users = eligible;
     this.bots.clear();
     this.sessions.clear();
 
-    logger.info(`Initializing ${users.length} users...`);
+    logger.info(`Initializing ${eligible.length} users...`);
 
-    const hasVfs = users.some((u) => (u.provider || '').toLowerCase() === 'vfsglobal');
+    const hasVfs = eligible.some((u) => (u.provider || '').toLowerCase() === 'vfsglobal');
     const vfsProxy = hasVfs
       ? await resolveVfsProxy({
           vfsProxyUrl: this.config.vfsProxyUrl ?? null,
@@ -98,7 +113,7 @@ export class UserBotManager {
       logger.info(`VFS proxy resolved: ${vfsProxy.server}`);
     }
 
-    for (const user of users) {
+    for (const user of eligible) {
       try {
         const facilityId = user.facilityId ?? this.config.facilityId ?? 134;
         const botConfig = {
@@ -212,11 +227,23 @@ export class UserBotManager {
     if (now.getHours() === 10 && now.getMinutes() < 5 && shouldSendDailyReport()) {
       try {
         const m = getMetrics();
+        const apiKey = this.config.captcha2CaptchaApiKey?.trim();
+        let captchaBalanceUsd: string | undefined;
+        let captchaBalanceError: string | undefined;
+        if (apiKey) {
+          const bal = await fetch2CaptchaBalance(apiKey);
+          if (bal.ok) captchaBalanceUsd = bal.balanceUsd;
+          else captchaBalanceError = bal.error;
+        }
         const report = formatDailyStatsReport({
           activeUsersCount: this.users.length,
           dailySlotsMissed: m.dailySlotsMissed ?? 0,
           dailyBookings: m.dailyBookings ?? 0,
           dailyErrorCounts: m.dailyErrorCounts ?? {},
+          checksTotal: m.checksTotal,
+          bookingsTotal: m.bookingsTotal,
+          captchaBalanceUsd,
+          captchaBalanceError,
         });
         await notif.send(report, chatId);
         markDailyReportSent();

@@ -2,7 +2,7 @@
 
 Функциональный набор и ограничения. Архитектура и структура кода — в [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Окружение:** Node.js 18+ (см. `engines` в package.json, [DEPLOY.md](../DEPLOY.md)).
+**Окружение:** Node.js 20+ (см. `engines` в package.json, [DEPLOY.md](../DEPLOY.md)).
 
 ## 1. Назначение
 

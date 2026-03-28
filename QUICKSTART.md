@@ -4,7 +4,7 @@ Follow these steps to get the multi-user visa bot running:
 
 ## Prerequisites Checklist
 
-- [ ] Node.js 18+ installed
+- [ ] Node.js 20+ installed
 - [ ] Google account
 - [ ] Telegram account
 - [ ] Access to https://ais.usvisa-info.com/

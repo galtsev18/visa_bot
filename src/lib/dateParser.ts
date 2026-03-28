@@ -56,6 +56,18 @@ export function parseDateRange(range: { from?: string; to?: string } | null | un
 }
 
 /**
+ * Default JSON for sheet `date_ranges` when the cell is empty or invalid:
+ * from the first day of the current month through end of calendar year +2 (wide window for slot search).
+ */
+export function defaultDateRangesJson(): string {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear() + 2, 11, 31);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return JSON.stringify([{ from: fmt(from), to: fmt(to) }]);
+}
+
+/**
  * Parse an array of date ranges.
  */
 export function parseDateRanges(ranges: unknown): ParsedDateRange[] {

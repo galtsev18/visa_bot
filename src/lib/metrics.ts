@@ -1,7 +1,7 @@
 /**
  * Simple metrics for monitor (Phase 5.15).
  * Persisted to a JSON file so the health command can read them from another process.
- * Daily stats (slots missed, bookings, errors) accumulate and are sent in the 10:00 report, then reset.
+ * Daily stats (slots missed, bookings, errors) + live 2Captcha balance are sent once per local day (~10:00), then daily counters reset.
  */
 
 import { writeFileSync, readFileSync, existsSync } from 'fs';
