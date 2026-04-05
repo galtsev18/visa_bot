@@ -14,6 +14,13 @@ export interface SettingsOverrides {
   rotationCooldown?: number;
   aisRequestDelaySec?: number;
   aisRateLimitBackoffSec?: number;
+  vfsRequestDelaySec?: number;
+  vfsRateLimitBackoffSec?: number;
+  /** Settings sheet only (not .env); merged with env in MergedConfigProvider. */
+  geonixApiKey?: string | null;
+  geonixProxyListType?: string | null;
+  vfsProxyCountry?: string | null;
+  vfsProxyUrl?: string | null;
   captcha2CaptchaApiKey?: string;
   pauseUsRotation?: boolean;
   pauseVfsRotation?: boolean;

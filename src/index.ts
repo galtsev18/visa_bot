@@ -14,6 +14,9 @@ import { updateSettingsTimingsCommand } from './commands/update-settings-timings
 import { showSheetHeadersCommand } from './commands/show-sheet-headers';
 import { getVfsLoginCredentialsCommand } from './commands/get-vfs-login-credentials';
 import { captureVfsFormRequestsCommand } from './commands/capture-vfs-form-requests';
+import { listVfsDatesCommand } from './commands/list-vfs-dates';
+import { vfsLoginDebugCaptureCommand } from './commands/vfsLoginDebugCapture';
+import { patchCacheAvailableBooleansCommand } from './commands/patch-cache-available-booleans';
 
 // CLI boundary: avoid raw stack dumps for unhandled rejections
 process.on('unhandledRejection', (reason) => {
@@ -54,6 +57,14 @@ program
   .action(() => updateSettingsTimingsCommand());
 
 program
+  .command('patch-cache-available-booleans')
+  .description(
+    'One-time: replace text TRUE/FALSE in Available Dates Cache column "available" with real boolean cells'
+  )
+  .option('--dry-run', 'Only print how many cells would be fixed (no write)')
+  .action((opts: { dryRun?: boolean }) => patchCacheAvailableBooleansCommand(opts));
+
+program
   .command('show-sheet-headers')
   .description('Print header row of US_users and VFS users sheets')
   .action(() => showSheetHeadersCommand());
@@ -61,13 +72,41 @@ program
 program
   .command('get-vfs-login-credentials')
   .description('Write first VFS user email/password from Sheets to .tmp/vfs-login.json (for browser login)')
-  .action(() => getVfsLoginCredentialsCommand());
+  .action(async () => {
+    await getVfsLoginCredentialsCommand();
+  });
 
 program
   .command('capture-vfs-form-requests')
   .description('Puppeteer: log in to VFS, run Start New Booking + select options, capture XHR/fetch to .tmp/vfs-captured-requests.json')
   .option('--visible', 'Show browser window (solve captcha manually)')
-  .action((opts: { visible?: boolean }) => captureVfsFormRequestsCommand(opts));
+  .option(
+    '--with-time',
+    'After dates load, click first date and read time slots (captures slot/booking-related XHR)'
+  )
+  .action((opts: { visible?: boolean; withTime?: boolean }) => captureVfsFormRequestsCommand(opts));
+
+program
+  .command('list-vfs-dates')
+  .description(
+    'VFS only: browser login from .tmp/vfs-login.json, then print available interview dates (same algorithm as monitor; use for manual checks)'
+  )
+  .option('--visible', 'Show browser (manual captcha / Cloudflare)')
+  .option('--no-proxy', 'Do not use VFS_PROXY_URL / Geonix (if proxy auth fails or you test locally)')
+  .action((opts: { visible?: boolean; proxy?: boolean }) => listVfsDatesCommand(opts));
+
+program
+  .command('vfs-login-debug')
+  .description(
+    'Open VFS login in a headed browser, log CDP network + console + per-frame DOM/HTML snapshots to .tmp/vfs-login-debug/ — press Ctrl+C when done (you solve captcha manually). Uses VFS/Geonix proxy from Settings like list-vfs-dates unless --no-proxy'
+  )
+  .option('--url <url>', 'Login URL (default: loginUrl from .tmp/vfs-login.json)')
+  .option('--interval <sec>', 'Seconds between automatic snapshots', '5')
+  .option('--html-max <n>', 'Max characters of outerHTML per frame in each snapshot', '80000')
+  .option('--no-proxy', 'Do not use VFS_PROXY_URL / Geonix (direct connection)')
+  .action((opts: { url?: string; interval?: string; htmlMax?: string; proxy?: boolean }) =>
+    vfsLoginDebugCaptureCommand(opts)
+  );
 
 program
   .command('test-vfs-captcha')

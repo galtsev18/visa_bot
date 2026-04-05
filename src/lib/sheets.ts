@@ -19,6 +19,7 @@ import { createUser, User } from './user';
 import {
   createSheetsClientCore,
   type SheetsClientCore,
+  type SheetCellValue,
 } from './sheetsClientCore';
 
 const SHEET_US_USERS = 'US_users';
@@ -26,6 +27,29 @@ const SHEET_VFS_USERS = 'VFS users';
 const SHEET_CACHE = 'Available Dates Cache';
 const SHEET_LOGS = 'Booking Attempts Log';
 const SHEET_SETTINGS = 'Settings';
+
+/** Cache column `available`: new rows use boolean; old rows used RAW strings "TRUE"/"FALSE" (shown with leading ' in Sheets as text). */
+function parseCacheAvailableCell(raw: unknown): boolean {
+  if (raw === true) return true;
+  if (raw === false) return false;
+  const s = String(raw ?? '')
+    .trim()
+    .replace(/^'/, '')
+    .toUpperCase();
+  return s === 'TRUE' || s === '1' || s === 'YES';
+}
+
+/** Text/number legacy → boolean for one-time patch; `null` = already boolean or leave cell unchanged. */
+function cacheAvailableTextToBooleanIfNeeded(raw: unknown): boolean | null {
+  if (raw === true || raw === false) return null;
+  const s = String(raw ?? '')
+    .trim()
+    .replace(/^'/, '')
+    .toUpperCase();
+  if (s === 'TRUE' || s === '1' || s === 'YES') return true;
+  if (s === 'FALSE' || s === '0' || s === 'NO') return false;
+  return null;
+}
 
 export type UsersSheetName = typeof SHEET_US_USERS | typeof SHEET_VFS_USERS;
 
@@ -72,6 +96,8 @@ export interface SheetsClient {
   writeSettingsTimingDefaults(): Promise<void>;
   /** Читает первую строку (шапку) листов US_users и VFS users. */
   getSheetHeaders(): Promise<{ usUsers: string[]; vfsUsers: string[] }>;
+  /** Разовый патч: колонка `available` в Available Dates Cache — текстовые TRUE/FALSE → boolean (как при новой записи). */
+  patchCacheAvailableTextToBooleans(options?: { dryRun?: boolean }): Promise<{ fixed: number; unchanged: number }>;
 }
 
 /** CacheEntryFromSheet and BookingAttemptLog moved below; forward ref for SheetsClient */
@@ -362,6 +388,7 @@ export async function createSheetsClient(
     },
     writeSettingsTimingDefaults: () => writeSettingsTimingDefaultsImpl(s),
     getSheetHeaders: () => getSheetHeadersImpl(s),
+    patchCacheAvailableTextToBooleans: (opts) => patchCacheAvailableTextToBooleansImpl(s, opts),
   };
 }
 
@@ -425,6 +452,8 @@ const SETTINGS_KEY_MAP: Record<
   FACILITY_ID: { configKey: 'facilityId', number: true },
   CAPTCHA_2CAPTCHA_API_KEY: { configKey: 'captcha2CaptchaApiKey', number: false },
   GEONIX_API_KEY: { configKey: 'geonixApiKey', number: false },
+  /** Which Geonix list endpoint: ipv4 | ipv6 | mobile | isp | resident (docs: list-proxies path `type`). Default ipv4. */
+  GEONIX_PROXY_LIST_TYPE: { configKey: 'geonixProxyListType', number: false },
   VFS_PROXY_COUNTRY: { configKey: 'vfsProxyCountry', number: false },
   VFS_PROXY_URL: { configKey: 'vfsProxyUrl', number: false },
   PAUSE_US_ROTATION: { configKey: 'pauseUsRotation', number: false, isBoolean: true },
@@ -445,6 +474,7 @@ const SETTINGS_DEFAULT_VALUES: Record<string, string> = {
   VFS_RATE_LIMIT_BACKOFF_SEC: '45',
   CAPTCHA_2CAPTCHA_API_KEY: '',
   GEONIX_API_KEY: '',
+  GEONIX_PROXY_LIST_TYPE: 'ipv4',
   VFS_PROXY_COUNTRY: 'Russia',
   VFS_PROXY_URL: '',
   PAUSE_US_ROTATION: 'FALSE',
@@ -516,20 +546,13 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
     const allKeys = Object.keys(SETTINGS_KEY_MAP);
     const missingKeys = allKeys.filter((k) => !existingKeys.has(k));
     if (missingKeys.length > 0) {
-      const valueToWrite = (key: string): string => {
-        const fromEnv = key === 'GEONIX_API_KEY' ? process.env.GEONIX_API_KEY
-          : key === 'VFS_PROXY_COUNTRY' ? process.env.VFS_PROXY_COUNTRY
-          : key === 'VFS_PROXY_URL' ? process.env.VFS_PROXY_URL
-          : null;
-        if (fromEnv != null && String(fromEnv).trim() !== '') return String(fromEnv).trim();
-        return SETTINGS_DEFAULT_VALUES[key] ?? '';
-      };
+      const valueToWrite = (key: string): string => SETTINGS_DEFAULT_VALUES[key] ?? '';
       const appendRows = missingKeys.map((k) => [k, valueToWrite(k)]);
       await core.append(`${SHEET_SETTINGS}!A:B`, appendRows, {
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
       });
-      logger.info(`Settings: added missing keys: ${missingKeys.join(', ')} (values from .env if present)`);
+      logger.info(`Settings: added missing keys: ${missingKeys.join(', ')} (defaults from SETTINGS_DEFAULT_VALUES)`);
       for (const k of missingKeys) {
         const mapping = SETTINGS_KEY_MAP[k];
         const raw = valueToWrite(k);
@@ -544,12 +567,6 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
       }
     }
 
-    const envFallbackForProxyKeys: Record<string, string | undefined> = {
-      GEONIX_API_KEY: process.env.GEONIX_API_KEY?.trim(),
-      VFS_PROXY_COUNTRY: process.env.VFS_PROXY_COUNTRY?.trim(),
-      VFS_PROXY_URL: process.env.VFS_PROXY_URL?.trim(),
-    };
-    const updates: { range: string; values: string[][] }[] = [];
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i] as (string | number)[];
       if (!row || row.length < 1) continue;
@@ -557,20 +574,12 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
         .trim()
         .toUpperCase()
         .replace(/\s+/g, '_');
-      let raw = row[1];
+      const raw = row[1];
       if (!key) continue;
       const mapping = SETTINGS_KEY_MAP[key];
       if (!mapping) continue;
       if (mapping.configKey === 'googleSheetsId' || mapping.configKey === 'googleCredentialsPath')
         continue;
-      const fromEnv = envFallbackForProxyKeys[key];
-      if (fromEnv && (raw === undefined || raw === null || String(raw).trim() === '')) {
-        raw = fromEnv;
-        updates.push({
-          range: `${SHEET_SETTINGS}!B${i + 1}`,
-          values: [[fromEnv]],
-        });
-      }
       if (mapping.isBoolean) {
         overrides[mapping.configKey] = parseSettingsBoolean(raw);
         continue;
@@ -578,10 +587,6 @@ async function readSettingsFromSheetImpl(s: SheetsClientState): Promise<Record<s
       const value = mapping.number ? Number(raw) : raw != null ? String(raw).trim() : '';
       if (mapping.number && (value === undefined || Number.isNaN(value as number))) continue;
       overrides[mapping.configKey] = value;
-    }
-    if (updates.length > 0) {
-      await core.batchUpdate(updates, 'RAW');
-      logger.info(`Settings: wrote GEONIX/VFS proxy values from .env into sheet (${updates.length} cells)`);
     }
     if (Object.keys(overrides).length > 0) {
       logger.info(`Settings from sheet: ${Object.keys(overrides).join(', ')}`);
@@ -615,7 +620,7 @@ async function flushDateRangeFixes(
 }
 
 function parseUsersFromSheet(
-  rows: (string | number)[][],
+  rows: SheetCellValue[][],
   sheetName: UsersSheetName,
   defaultProvider: 'ais' | 'vfs',
   s: SheetsClientState
@@ -749,7 +754,7 @@ async function getInitialDataImpl(s: SheetsClientState): Promise<{
             entry.times_available = [];
           }
         }
-        entry.available = entry.available === 'TRUE' || entry.available === true;
+        entry.available = parseCacheAvailableCell(entry.available);
         if (entry.date) {
           cacheEntries.push(entry as unknown as CacheEntryFromSheet);
           s.cacheDateToRowIndex.set(entry.date as string, i + 1);
@@ -792,11 +797,7 @@ async function readAvailableDatesCacheImpl(s: SheetsClientState): Promise<CacheE
           entry.times_available = [];
         }
       }
-      if (entry.available === 'TRUE' || entry.available === true) {
-        entry.available = true;
-      } else {
-        entry.available = false;
-      }
+      entry.available = parseCacheAvailableCell(entry.available);
       if (entry.date) {
         cache.push(entry as unknown as CacheEntryFromSheet);
         s.cacheDateToRowIndex.set(entry.date as string, i + 1);
@@ -841,7 +842,7 @@ async function updateAvailableDateImpl(
     const values = [
       dateWithTime,
       facilityId,
-      available ? 'TRUE' : 'FALSE',
+      available,
       now.toISOString(),
       JSON.stringify(times),
       cacheValidUntil.toISOString(),
@@ -862,6 +863,67 @@ async function updateAvailableDateImpl(
   } catch (error) {
     logger.error(`Failed to update cache for date ${date}: ${formatErrorForLog(error)}`);
   }
+}
+
+const PATCH_CACHE_BATCH = 80;
+
+async function patchCacheAvailableTextToBooleansImpl(
+  s: SheetsClientState,
+  options?: { dryRun?: boolean }
+): Promise<{ fixed: number; unchanged: number }> {
+  const { core } = s;
+  const rows = await core.get(`${SHEET_CACHE}!A1:F1000`);
+  if (!rows || rows.length < 2) {
+    logger.info('patch-cache-available: no data rows in Available Dates Cache');
+    return { fixed: 0, unchanged: 0 };
+  }
+
+  const headers = rows[0].map((h) => String(h).toLowerCase().replace(/\s+/g, '_'));
+  const availIdx = headers.indexOf('available');
+  if (availIdx < 0) {
+    throw new Error('Available Dates Cache: column "available" not found in header row');
+  }
+
+  let fixed = 0;
+  let unchanged = 0;
+  const updates: { range: string; values: SheetCellValue[][] }[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+    const raw = row[availIdx];
+    const asBool = cacheAvailableTextToBooleanIfNeeded(raw);
+    if (asBool === null) {
+      unchanged++;
+      continue;
+    }
+    const rowNum = i + 1;
+    const colLetter = columnIndexToLetter(availIdx);
+    updates.push({
+      range: sheetRange(SHEET_CACHE, `${colLetter}${rowNum}`),
+      values: [[asBool]],
+    });
+    fixed++;
+    if (updates.length >= PATCH_CACHE_BATCH) {
+      if (!options?.dryRun) await core.batchUpdate(updates, 'RAW');
+      updates.length = 0;
+    }
+  }
+
+  if (updates.length > 0 && !options?.dryRun) {
+    await core.batchUpdate(updates, 'RAW');
+  }
+
+  if (options?.dryRun) {
+    logger.info(
+      `patch-cache-available (dry-run): would fix ${fixed} cell(s), leave ${unchanged} as-is (already boolean or non-legacy text)`
+    );
+  } else {
+    logger.info(
+      `patch-cache-available: fixed ${fixed} cell(s); ${unchanged} unchanged (already boolean or non-legacy text)`
+    );
+  }
+  return { fixed, unchanged };
 }
 
 // ------------ 7. Domain: Logs ------------
@@ -1150,4 +1212,11 @@ export async function getSheetHeaders(): Promise<{
 }> {
   if (!defaultClient) throw new Error('Sheets not initialized. Run initializeSheets first.');
   return defaultClient.getSheetHeaders();
+}
+
+export async function patchCacheAvailableTextToBooleans(options?: {
+  dryRun?: boolean;
+}): Promise<{ fixed: number; unchanged: number }> {
+  if (!defaultClient) throw new Error('Sheets not initialized. Run initializeSheets first.');
+  return defaultClient.patchCacheAvailableTextToBooleans(options);
 }

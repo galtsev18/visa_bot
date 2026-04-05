@@ -136,6 +136,20 @@ npm start -- test-sheets
 npm start -- --help
 ```
 
+### VFS Global (optional)
+
+Users with `provider` = `vfsglobal` use [visa.vfsglobal.com](https://visa.vfsglobal.com/). Geonix/VFS proxy and 2Captcha live in the **Settings** sheet only (not in `.env`). Useful commands:
+
+```bash
+npm start -- get-vfs-login-credentials   # writes .tmp/vfs-login.json from Sheets
+npm run list-vfs-dates                   # print available VFS interview dates (manual check; same logic as monitor)
+# add --visible or --no-proxy as needed
+npm start -- capture-vfs-form-requests --with-time   # log XHR for debugging
+npm start -- test-vfs-captcha --browser
+```
+
+Details: [docs/VFS_GLOBAL.md](docs/VFS_GLOBAL.md).
+
 ## How It Behaves
 
 ### Multi-User Mode

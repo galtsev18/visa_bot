@@ -36,6 +36,8 @@ export interface AppConfig {
 
   // VFS proxy (cabinet often only from country IP, e.g. Russia; Geonix: https://geonix.com)
   geonixApiKey?: string | null;
+  /** Geonix API list type: ipv4 | ipv6 | mobile | isp | resident (see docs.geonix.com list-proxies). */
+  geonixProxyListType?: string | null;
   vfsProxyCountry?: string | null;
   vfsProxyUrl?: string | null;
 

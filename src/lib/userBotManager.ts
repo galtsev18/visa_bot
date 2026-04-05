@@ -57,6 +57,7 @@ export interface AppConfigLike {
   vfsRequestDelaySec?: number;
   vfsRateLimitBackoffSec?: number;
   geonixApiKey?: string | null;
+  geonixProxyListType?: string | null;
   vfsProxyCountry?: string | null;
   vfsProxyUrl?: string | null;
   pauseUsRotation?: boolean;
@@ -106,6 +107,7 @@ export class UserBotManager {
       ? await resolveVfsProxy({
           vfsProxyUrl: this.config.vfsProxyUrl ?? null,
           geonixApiKey: this.config.geonixApiKey ?? null,
+          geonixProxyListType: this.config.geonixProxyListType ?? null,
           vfsProxyCountry: this.config.vfsProxyCountry ?? null,
         })
       : null;

@@ -61,23 +61,12 @@ Once past Cloudflare (if any), VFS login may use a captcha (image or reCAPTCHA).
 
 Pass a custom solver when creating the bot (e.g. in code or via a wrapper script). The solver receives captcha data and must return the solved text/token.
 
-### 4. VFS API mapping (TODO)
+### 4. Fetch-based API vs browser flow
 
-The current VFS client implements:
+- **Browser session (`useBrowser` or Cloudflare fallback):** `vfsBrowserFlow.ts` drives the real site: login, **getAvailableDatesFromPage**, **getAvailableTimeFromPage**, **vfsBookFromPage**. Proxy and Geonix settings come from the **Settings** sheet (see above).
+- **Pure fetch (`VfsGlobalClient` without `_browserSession`):** `checkAvailableDate` / `checkAvailableTime` / `book` still use **placeholder URLs** in `vfsglobal.ts` (`/api/availability/...`). To rely on HTTP only (no Puppeteer), capture the real XHR URLs and bodies (e.g. `capture-vfs-form-requests --with-time`) and map them in `vfsglobal.ts`.
 
-- **Login** – form submit with captcha (image or reCAPTCHA v2).
-- **getAvailableDates / getAvailableTime / book** – placeholder endpoints.
-
-To finish integration you need to:
-
-1. Open https://visa.vfsglobal.com/rus/en/fra/login and log in manually.
-2. Open DevTools → Network and go to the appointment/calendar flow.
-3. Find the API calls that return available dates and time slots (and the booking POST).
-4. Update `src/lib/providers/vfsglobal.ts`:
-   - Set the correct URLs and query/body parameters in `checkAvailableDate`, `checkAvailableTime`, and `book`.
-   - Map the response JSON to date strings (YYYY-MM-DD) and time strings.
-
-Form field names on the login page may differ; the client tries common names (`email`, `Email`, `username`, `password`, etc.). If login fails, inspect the HTML and adjust the selectors in `vfsglobal.ts`.
+Form field names on the login page may differ; the fetch client tries common names (`email`, `Email`, `username`, `password`, etc.). If login fails, inspect the HTML and adjust the selectors in `vfsglobal.ts`.
 
 ### 5. Proxy for country-specific cabinet (e.g. Russia)
 
@@ -91,7 +80,9 @@ The **cabinet link** in the table (e.g. for Russia) is often only accessible fro
 3. In the Google Sheet **Settings** tab (key/value), add:
    - key **GEONIX_API_KEY**, value — your API key
    - key **VFS_PROXY_COUNTRY**, value — country name (e.g. `Russia`). Default in sheet: `Russia`.
-4. On startup (monitor) or when running `capture-vfs-form-requests`, the app reads these from the sheet, calls `GET https://geonix.com/personal/api/v1/{apiKey}/proxy/list/ipv4`, filter by country, and uses the first active proxy for the VFS browser (Puppeteer).
+   - optional key **GEONIX_PROXY_LIST_TYPE**, value — one of `ipv4`, `ipv6`, `mobile`, `isp`, `resident` (see [list-proxies](https://docs.geonix.com/api-reference/proxies/list-proxies)); default `ipv4`.
+4. On startup (monitor) or when running `capture-vfs-form-requests`, the app reads these from the sheet, calls `GET .../proxy/list/{type}`, filters by country, and picks an **ACTIVE** proxy. The API returns **`ip`** (proxy host to connect to), **`auth_ip`** (often order/whitelist metadata — not a substitute host), and **HTTP** (`port_http`) / **SOCKS** (`port_socks`) ports. The bot uses **`ip:port_http`** (or SOCKS URL when HTTP port is unset). HTTP vs SOCKS follows `port_http` / `port_socks` as above.
+5. If Geonix uses **IP whitelist** and the API returns **empty `login`/`password`**, the bot connects **without** `Proxy-Authorization`. In the Geonix dashboard, allow the **public egress IP** of the machine running the bot (the bot logs it via ipify). Do **not** confuse this with the API field **`auth_ip`** (provider metadata — often the proxy/auth gateway, not “what to whitelist”). Local PC vs production server = different egress IPs. Allow a few minutes after saving.
 
 **Option B: Manual proxy URL**  
 In the **Settings** sheet, add key **VFS_PROXY_URL**, value — full URL (overrides Geonix):
@@ -118,9 +109,11 @@ To see the exact API calls and request bodies when you click "Start New Booking"
 2. **Automated (Puppeteer):** Run:
    ```bash
    npm start -- get-vfs-login-credentials   # creates .tmp/vfs-login.json from Sheets
+   npm start -- list-vfs-dates --visible     # prints JSON { ok, count, dates }
    npm start -- capture-vfs-form-requests --visible
+   npm start -- capture-vfs-form-requests --visible --with-time   # also click first date + read slots (more XHR)
    ```
-   With `--visible` a browser window opens; solve the captcha and complete login if needed. The script then clicks "Start New Booking", selects centre/category/subcategory from the credentials file, and writes all XHR/fetch requests to `.tmp/vfs-captured-requests.json` (URL, method, postData). Cloudflare may block headless mode; use `--visible` and solve captcha manually.
+   Geonix/VFS proxy and 2Captcha are read from the **Settings** sheet (same merge as `monitor`). With `--visible` a browser window opens; solve the captcha and complete login if needed. `capture-vfs-form-requests` clicks "Start New Booking", selects centre/category/subcategory from the credentials file, and writes XHR/fetch to `.tmp/vfs-captured-requests.json`. Use `--no-proxy` on `list-vfs-dates` for a direct connection. Cloudflare may block headless mode; use `--visible` and solve captcha manually.
 
 ## What the VFS page sends when the form is filled
 
@@ -157,7 +150,7 @@ To see the exact API calls and request bodies when you click "Start New Booking"
 | Login            | POST to form `action` with email, password, captcha token, `application/x-www-form-urlencoded` | May be Angular API (XHR/fetch)    |
 | Centre/category  | Puppeteer: click mat-option by text — no HTTP body in our code                              | Unknown; inspect in DevTools      |
 | Dates / times    | Placeholder `fetch` to `/api/availability/dates` and `?date=…` in code                      | Real URLs/params from Network     |
-| Book             | Not implemented                                                                             | Real POST from Network            |
+| Book             | Browser: `vfsBookFromPage` (clicks + optional API success hint) — tune for your locale if needed | Real POST from Network            |
 
 ## Summary
 

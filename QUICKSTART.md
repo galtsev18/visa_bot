@@ -77,10 +77,13 @@ npm install
    | VFS_RATE_LIMIT_BACKOFF_SEC | 45 |
    | CAPTCHA_2CAPTCHA_API_KEY | (опционально, для 2Captcha) |
    | **GEONIX_API_KEY** | **(только здесь, не в .env)** ключ с https://geonix.com/personal/api/ |
+   | **GEONIX_PROXY_LIST_TYPE** | (опционально) `ipv4` / `mobile` / … — см. [Geonix list-proxies](https://docs.geonix.com/api-reference/proxies/list-proxies) |
    | **VFS_PROXY_COUNTRY** | **Russia** (или другая страна кабинета VFS) |
    | **VFS_PROXY_URL** | (опционально) http://login:password@host:port — подменяет Geonix |
 
    Полный список ключей и значений по умолчанию: [docs/SETTINGS_SHEET.md](docs/SETTINGS_SHEET.md).
+
+   **Отладка VFS (после настройки Settings):** `npm start -- get-vfs-login-credentials` → **`npm run list-vfs-dates`** (список доступных дат для записи; опции `--visible` / `--no-proxy`). Снять сеть: `npm start -- capture-vfs-form-requests --with-time`. Подробнее: [docs/VFS_GLOBAL.md](docs/VFS_GLOBAL.md).
 
 ## Step 5: Test Google Sheets Connection
 

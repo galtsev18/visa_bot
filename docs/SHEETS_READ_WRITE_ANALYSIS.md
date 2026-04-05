@@ -9,7 +9,7 @@
 - **readSettingsFromSheet()** — один `get(Settings)`. При refresh вызывается параллельно с getActiveUsers → 2 запроса (Users + Settings). Объединять в batchGet можно, но выигрыш небольшой.
 
 ### Запись
-- **updateUserLastChecked** + **updateUserPriority** — после каждого пользователя два вызова → два `update` (или два элемента в буфере). На N пользователей = 2N записей. **Оптимизация:** один метод `updateUserAfterCheck(email, lastChecked, priority)` с одним `batchUpdate` (2 ячейки) на пользователя.
+- **updateUserAfterCheck** — один `batchUpdate` на пользователя (last_checked + priority) вместо пары `updateUserLastChecked` + `updateUserPriority` ✅.
 - **updateAvailableDate** — каждый вызов даёт один update/append. При flush буфера объединяются в один batchUpdate ✅ уже оптимально за счёт буфера.
 - **logBookingAttempt** — один append на попытку. Редко батчится (по одной попытке за раз).
 

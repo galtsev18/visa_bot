@@ -13,6 +13,9 @@ import { proxyServerArg } from '../geonixProxy';
 
 const VFS_BASE_URI = 'https://visa.vfsglobal.com';
 
+/** Angular Material legacy + MDC (vfsglobal often ships MDC inputs). */
+const VFS_MAT_INPUT_CSS = 'input.mat-input-element, input.mat-mdc-input-element';
+
 const TURNSTILE_INJECT_SCRIPT = `
 (function() {
   if (window.__cfInjected) return;
@@ -70,6 +73,229 @@ export interface VfsAppointmentParams {
   visa_sub_category: string;
 }
 
+type MatInputHandle = { type: (text: string, opts?: { delay?: number }) => Promise<void> };
+
+/** Fill email/password on VFS login: try main frame, Puppeteer frames, shadow DOM, then CSS fallbacks. */
+async function fillVfsLoginFields(
+  page: unknown,
+  email: string,
+  password: string,
+  emailSelector: string,
+  passwordSelector: string
+): Promise<boolean> {
+  const p = page as {
+    $$: (s: string) => Promise<MatInputHandle[]>;
+    type: (s: string, text: string, opts?: { delay?: number }) => Promise<void>;
+    evaluate: <T, Args extends unknown[] = []>(fn: (...args: Args) => T, ...args: Args) => Promise<T>;
+    frames?: () => Array<{ $$: (s: string) => Promise<MatInputHandle[]> }>;
+  };
+
+  const tryTarget = async (target: { $$: (s: string) => Promise<MatInputHandle[]> }) => {
+    const mats = await target.$$(VFS_MAT_INPUT_CSS);
+    if (mats.length >= 2) {
+      await mats[0].type(email, { delay: 50 });
+      await mats[1].type(password, { delay: 50 });
+      return true;
+    }
+    return false;
+  };
+
+  if (await tryTarget(p)) return true;
+  if (typeof p.frames === 'function') {
+    for (const frame of p.frames()) {
+      if (await tryTarget(frame)) return true;
+    }
+  }
+
+  const shadowOk = await p.evaluate((em: string, pw: string) => {
+    const stack: Array<Document | ShadowRoot> = [document];
+    while (stack.length > 0) {
+      const root = stack.pop() as Document | ShadowRoot;
+      const mats = root.querySelectorAll(VFS_MAT_INPUT_CSS);
+      if (mats.length >= 2) {
+        const a = mats[0] as HTMLInputElement;
+        const b = mats[1] as HTMLInputElement;
+        a.value = em;
+        b.value = pw;
+        a.dispatchEvent(new Event('input', { bubbles: true }));
+        b.dispatchEvent(new Event('input', { bubbles: true }));
+        a.dispatchEvent(new Event('change', { bubbles: true }));
+        b.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }
+      const nodes = root.querySelectorAll('*');
+      for (let i = 0; i < nodes.length; i++) {
+        const h = nodes[i] as HTMLElement;
+        if (h.shadowRoot) stack.push(h.shadowRoot);
+      }
+    }
+    return false;
+  }, email, password);
+  if (shadowOk) return true;
+
+  try {
+    await p.type(emailSelector, email, { delay: 50 });
+    await p.type(passwordSelector, password, { delay: 50 });
+    return true;
+  } catch {
+    /* Puppeteer sometimes cannot resolve compound selectors; use keyboard after focus */
+  }
+  const kb = (page as unknown as { keyboard?: { type: (t: string, o?: { delay?: number }) => Promise<void> } })
+    .keyboard;
+  if (!kb?.type) return false;
+  await p.evaluate(() => {
+    const first =
+      document.querySelector('input.mat-input-element') ||
+      document.querySelector('input.mat-mdc-input-element') ||
+      document.querySelector('input[type="email"]') ||
+      document.querySelector('#mat-input-0');
+    (first as HTMLElement | null)?.focus();
+  });
+  await kb.type(email, { delay: 45 });
+  await p.evaluate(() => {
+    const mats = document.querySelectorAll('input.mat-input-element, input.mat-mdc-input-element');
+    const second =
+      mats.length >= 2 ? mats[1] : document.querySelector('input[type="password"], #mat-input-1');
+    (second as HTMLElement | null)?.focus();
+  });
+  await kb.type(password, { delay: 45 });
+  return true;
+}
+
+/**
+ * Runs in browser: VFS login fields present (main document or iframe).
+ * Do not require positive getBoundingClientRect — Material often keeps native inputs at 0×0 with a visual overlay.
+ */
+function vfsProbeLoginFormReady(): boolean {
+  const mat = document.querySelectorAll('input.mat-input-element, input.mat-mdc-input-element');
+  if (mat.length >= 2) return true;
+  const pwd = document.querySelector('input[type="password"]');
+  if (!pwd) return false;
+  return !!(
+    document.querySelector(
+      'input[type="email"], #mat-input-0, input[name="email" i], input[name="Email"], input.mat-input-element, input.mat-mdc-input-element'
+    ) || mat.length >= 1
+  );
+}
+
+/**
+ * Polls all frames until the login card is visible. Optionally races each poll with the current
+ * Turnstile wait so we do not give up before the widget fires (can be >2 min on slow loads).
+ */
+async function waitForVfsLoginForm(
+  page: unknown,
+  timeoutMs: number,
+  getCaptchaWait?: () => Promise<void>
+): Promise<void> {
+  type EvalFrame = { evaluate: <T>(fn: () => T) => Promise<T> };
+  const p = page as {
+    evaluate?: <T>(fn: () => T) => Promise<T>;
+    mainFrame?: () => EvalFrame;
+    frames?: () => EvalFrame[];
+  };
+  const deadline = Date.now() + timeoutMs;
+  const collectFrames = (): EvalFrame[] => {
+    if (typeof p.frames === 'function') {
+      const all = p.frames();
+      if (all.length > 0) return all;
+    }
+    if (typeof p.mainFrame === 'function') return [p.mainFrame()];
+    return [];
+  };
+  while (Date.now() < deadline) {
+    const frames = collectFrames();
+    const targets: EvalFrame[] =
+      frames.length > 0
+        ? frames
+        : typeof p.evaluate === 'function'
+          ? [{ evaluate: <T>(fn: () => T) => p.evaluate!(fn) }]
+          : [];
+    let anyOk = false;
+    for (const fr of targets) {
+      try {
+        if (await fr.evaluate(vfsProbeLoginFormReady)) anyOk = true;
+      } catch {
+        /* detached or cross-origin */
+      }
+    }
+    if (anyOk) return;
+    const w = getCaptchaWait?.();
+    if (w) {
+      try {
+        await Promise.race([
+          w,
+          new Promise<void>((r) => setTimeout(r, 500)),
+        ]);
+      } catch (e) {
+        throw e;
+      }
+    } else {
+      await new Promise((r) => setTimeout(r, 450));
+    }
+  }
+  throw new Error(`Waiting failed: ${timeoutMs}ms exceeded`);
+}
+
+function vfsProbePostLoginLanding(): boolean {
+  const href = window.location.href.toLowerCase();
+  const txt = (document.body?.innerText || '').replace(/\s+/g, ' ');
+  if (/start\s*new\s*booking/i.test(txt)) return true;
+  if (/sign\s*out|log\s*out|my\s*applications|dashboard/i.test(txt)) return true;
+  const stillOnLoginForm = href.includes('/login') && document.querySelector('input[type="password"]');
+  if (stillOnLoginForm) return false;
+  if (/invalid|incorrect\s*password|authentication\s*failed|try\s*again/i.test(txt)) return false;
+  if (!href.includes('/login')) {
+    return /book|appointment|visa|welcome|application|centre|center/i.test(txt);
+  }
+  return false;
+}
+
+function vfsTurnstileTokenPresent(): boolean {
+  const checkRoot = (root: Document | ShadowRoot): boolean => {
+    const el = root.querySelector(
+      'textarea[name="cf-turnstile-response"], input[name="cf-turnstile-response"]'
+    ) as HTMLInputElement | HTMLTextAreaElement | null;
+    if (el?.value && el.value.trim().length > 20) return true;
+    const nodes = root.querySelectorAll('*');
+    for (let i = 0; i < nodes.length; i++) {
+      const h = nodes[i] as HTMLElement;
+      if (h.shadowRoot && checkRoot(h.shadowRoot)) return true;
+    }
+    return false;
+  };
+  return checkRoot(document);
+}
+
+async function anyFrameEvaluate<T>(page: unknown, fn: () => T): Promise<T[]> {
+  type EvalFrame = { evaluate: <R>(f: () => R) => Promise<R> };
+  const p = page as {
+    evaluate?: <R>(f: () => R) => Promise<R>;
+    frames?: () => EvalFrame[];
+    mainFrame?: () => EvalFrame;
+  };
+  const frames =
+    typeof p.frames === 'function' && p.frames().length > 0
+      ? p.frames()
+      : typeof p.mainFrame === 'function'
+        ? [p.mainFrame()]
+        : [];
+  const targets: EvalFrame[] =
+    frames.length > 0
+      ? frames
+      : typeof p.evaluate === 'function'
+        ? [{ evaluate: <R>(f: () => R) => p.evaluate!(f) }]
+        : [];
+  const out: T[] = [];
+  for (const fr of targets) {
+    try {
+      out.push(await fr.evaluate(fn));
+    } catch {
+      /* detached / cross-origin */
+    }
+  }
+  return out;
+}
+
 /**
  * Launch browser, open VFS login page, pass Cloudflare if needed, do pre_login (cookie consent),
  * fill email/password, solve captcha, submit, wait for "Start New Booking".
@@ -87,11 +313,16 @@ export async function vfsBrowserLogin(
   }
 
   type BrowserLike = { newPage(): Promise<PageLike>; close(): Promise<void> };
+  type ElementHandleLike = {
+    click: () => Promise<void>;
+    type: (text: string, opts?: { delay?: number }) => Promise<void>;
+  };
   type PageLike = {
     setUserAgent(u: string): Promise<void>;
     setViewport(v: { width: number; height: number }): Promise<void>;
     goto(url: string, opts: { waitUntil: string; timeout: number }): Promise<unknown>;
     waitForSelector(sel: string, opts?: { timeout?: number }): Promise<unknown>;
+    waitForFunction(fn: () => boolean, opts?: { timeout?: number }): Promise<unknown>;
     click(sel: string, opts?: { timeout?: number }): Promise<void>;
     type(sel: string, text: string, opts?: { delay?: number }): Promise<void>;
     evaluateOnNewDocument(s: string): Promise<void>;
@@ -100,7 +331,7 @@ export async function vfsBrowserLogin(
     content(): Promise<string>;
     url: string;
     title(): Promise<string>;
-    $$(sel: string): Promise<Array<{ click: () => Promise<void> }>>;
+    $$(sel: string): Promise<ElementHandleLike[]>;
   };
 
   let puppeteer: { launch: (opts: object) => Promise<BrowserLike> };
@@ -134,30 +365,44 @@ export async function vfsBrowserLogin(
   const page = (await browser.newPage()) as PageLike & {
     authenticate?: (opts: { username: string; password: string }) => Promise<void>;
   };
-  if (options.proxy?.server && options.proxy.username && page.authenticate) {
-    await page.authenticate({
-      username: options.proxy.username,
-      password: options.proxy.password,
-    });
+  if (options.proxy?.server) {
+    const proxyUser = (options.proxy.username ?? '').trim();
+    const proxyPass = (options.proxy.password ?? '').trim();
+    if (proxyUser || proxyPass) {
+      if (page.authenticate) {
+        await page.authenticate({ username: proxyUser, password: proxyPass });
+      } else {
+        logger.warn('VFS browser: proxy set but Page.authenticate is unavailable; proxy auth may fail');
+      }
+    } else {
+      logger.info(
+        'VFS browser: proxy without login/password (e.g. Geonix IP whitelist) — no page.authenticate(). If you see ERR_INVALID_AUTH, wait for whitelist sync or confirm egress IP in Geonix; else set VFS_PROXY_URL with credentials'
+      );
+    }
   }
   await page.setUserAgent(
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   );
   await page.setViewport({ width: 1280, height: 720 });
 
-  let captchaResolve: () => void;
-  let captchaReject: (err: unknown) => void;
+  let captchaResolve!: () => void;
+  let captchaReject!: (err: unknown) => void;
   /** Set when Turnstile/2Captcha fails (for clearer errors vs form timeout). */
   let captchaFailure: unknown = undefined;
-  const captchaDone = new Promise<void>((res, rej) => {
-    captchaResolve = res;
-    captchaReject = (err: unknown) => {
-      captchaFailure = err;
-      rej(err);
-    };
-  });
-  // If Turnstile fails before Promise.race below, without this Node reports unhandledRejection → process.exit(1) in index.ts.
-  void captchaDone.catch(() => {});
+  /** Resolves once per successful Turnstile solve; re-armed so post-login widget can be awaited too. */
+  let captchaWait!: Promise<void>;
+  const rearmCaptchaWait = () => {
+    captchaWait = new Promise<void>((res, rej) => {
+      captchaResolve = () => res();
+      captchaReject = (err: unknown) => {
+        captchaFailure = err;
+        rej(err);
+      };
+    });
+    void captchaWait.catch(() => {});
+  };
+  rearmCaptchaWait();
+  let lastTurnstileSolvedAt = 0;
 
   await page.evaluateOnNewDocument(TURNSTILE_INJECT_SCRIPT);
   page.on('console', async (msg) => {
@@ -195,46 +440,63 @@ export async function vfsBrowserLogin(
         const w = window as unknown as { cfCallback?: (t: string) => void };
         if (typeof w.cfCallback === 'function') w.cfCallback(t);
       }, token);
-      captchaResolve!();
+      lastTurnstileSolvedAt = Date.now();
+      captchaResolve();
+      rearmCaptchaWait();
     } catch (err) {
       logger.error(`VFS browser: 2Captcha Turnstile failed: ${formatErrorForLog(err)}`);
-      captchaReject!(err);
+      captchaReject(err);
     }
   });
 
   try {
     await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout });
 
-    // Pre-login: cookie consent (Reject All) — ranjan pattern
-    try {
-      const clicked = await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button, [role="button"]'));
-        const reject = buttons.find(
-          (b) =>
-            /reject\s*all/i.test(b.textContent || '') || (b.getAttribute('aria-label') || '').toLowerCase().includes('reject')
-        );
-        if (reject) {
-          (reject as HTMLButtonElement).click();
-          return true;
-        }
-        return false;
-      });
-      if (clicked) await new Promise((r) => setTimeout(r, 500));
-    } catch {
-      // No cookie banner or different locale
-    }
+    // Cookie banner (VFS / OneTrust: "Accept All Cookies" / "Accept Only Necessary")
+    const dismissCookieBanner = async () => {
+      try {
+        const clicked = await page.evaluate(() => {
+          const ot = document.querySelector('#onetrust-accept-btn-handler, #accept-recommended-btn-handler');
+          if (ot) {
+            (ot as HTMLElement).click();
+            return true;
+          }
+          const buttons = Array.from(document.querySelectorAll('button, [role="button"], a[role="button"]'));
+          const norm = (b: Element) => (b.textContent || '').replace(/\s+/g, ' ').trim();
+          const acceptAll = buttons.find((b) => /accept\s*all\s*cookies?/i.test(norm(b)));
+          const acceptNecessary = buttons.find((b) => /accept\s*only\s*necessary/i.test(norm(b)));
+          const reject = buttons.find(
+            (b) =>
+              /reject\s*all/i.test(norm(b)) ||
+              (b.getAttribute('aria-label') || '').toLowerCase().includes('reject')
+          );
+          const btn = (acceptAll ?? acceptNecessary ?? reject) as HTMLButtonElement | undefined;
+          if (btn) {
+            btn.click();
+            return true;
+          }
+          return false;
+        });
+        if (clicked) await new Promise((r) => setTimeout(r, 700));
+      } catch {
+        // No cookie banner or different locale
+      }
+    };
+    await dismissCookieBanner();
 
     // Give Cloudflare Turnstile time to render so our inject can hook it (if present)
     await new Promise((r) => setTimeout(r, 3000));
 
-    // Wait for login form (after Cloudflare may have been solved); give time for Turnstile + redirect
-    const emailSelector =
-      '#mat-input-0, input[name="email"], input[type="email"], input[name="Email"]';
-    const passwordSelector =
-      '#mat-input-1, input[name="password"], input[type="password"], input[name="Password"]';
+    // Angular Material (legacy + MDC): email is often type="text" (not type="email").
+    const emailSelector = `#mat-input-0, ${VFS_MAT_INPUT_CSS}, input[name="email"], input[type="email"], input[name="Email"]`;
+    const passwordSelector = `#mat-input-1, ${VFS_MAT_INPUT_CSS}, input[name="password"], input[type="password"], input[name="Password"]`;
     const formTimeout = options.formTimeout ?? 60000;
+    await new Promise((r) => setTimeout(r, 800));
+    await dismissCookieBanner();
+
     try {
-      await page.waitForSelector(`${emailSelector}, ${passwordSelector}`, { timeout: formTimeout });
+      await waitForVfsLoginForm(page, formTimeout, () => captchaWait);
+      await new Promise((r) => setTimeout(r, 2500));
     } catch (formErr) {
       if (captchaFailure !== undefined) {
         throw captchaFailure instanceof Error
@@ -242,7 +504,7 @@ export async function vfsBrowserLogin(
           : new Error(String(captchaFailure));
       }
       try {
-        const { writeFile, mkdir } = await import('fs/promises');
+        const { mkdir } = await import('fs/promises');
         const { join } = await import('path');
         const dir = join(process.cwd(), '.tmp');
         await mkdir(dir, { recursive: true });
@@ -261,8 +523,49 @@ export async function vfsBrowserLogin(
         : new Error(String(captchaFailure));
     }
 
-    await page.type(emailSelector, options.email, { delay: 50 });
-    await page.type(passwordSelector, options.password, { delay: 50 });
+    const filled = await fillVfsLoginFields(
+      page,
+      options.email,
+      options.password,
+      emailSelector,
+      passwordSelector
+    );
+    /** Must be after fill: an early Cloudflare solve must not count as “login widget done”. */
+    const afterFillAt = Date.now();
+    if (!filled) {
+      throw new Error(
+        'VFS: could not type into login fields (try --visible, or check page structure / iframe)'
+      );
+    }
+
+    // Login card often has its own Turnstile — wait for a solve *after* fill or a populated response field.
+    await new Promise((r) => setTimeout(r, 1500));
+    const loginCaptchaMs = Math.min(180_000, Math.max(60_000, formTimeout));
+    const loginTurnstileDeadline = Date.now() + loginCaptchaMs;
+    while (Date.now() < loginTurnstileDeadline) {
+      if (lastTurnstileSolvedAt > afterFillAt) {
+        logger.info('VFS browser: Turnstile solved after credential fill');
+        break;
+      }
+      const tokens = await anyFrameEvaluate(page, vfsTurnstileTokenPresent);
+      if (tokens.some(Boolean)) {
+        logger.info('VFS browser: Turnstile response field populated');
+        break;
+      }
+      try {
+        await Promise.race([captchaWait, new Promise<void>((r) => setTimeout(r, 500))]);
+      } catch (e) {
+        throw e;
+      }
+    }
+    if (lastTurnstileSolvedAt <= afterFillAt) {
+      const tokens = await anyFrameEvaluate(page, vfsTurnstileTokenPresent);
+      if (!tokens.some(Boolean)) {
+        logger.warn('VFS browser: no Turnstile completion detected after fill; Sign In may fail');
+      }
+    }
+
+    await new Promise((r) => setTimeout(r, 800));
 
     // Click Sign In — ranjan: get_by_role("button", name="Sign In")
     const signInClicked = await page.evaluate(() => {
@@ -276,33 +579,57 @@ export async function vfsBrowserLogin(
     });
     if (!signInClicked) await page.click('button[type="submit"], input[type="submit"]', { timeout: 5000 });
 
-    try {
-      await Promise.race([
-        captchaDone,
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('NO_CAPTCHA_PARAMS')), 12000)),
-      ]);
-    } catch (e) {
-      if ((e as Error)?.message !== 'NO_CAPTCHA_PARAMS') throw e;
+    await new Promise((r) => setTimeout(r, 4000));
+
+    const landingDeadline = Date.now() + 70000;
+    let hasLanding = false;
+    while (Date.now() < landingDeadline) {
+      const hits = await anyFrameEvaluate(page, vfsProbePostLoginLanding);
+      if (hits.some(Boolean)) {
+        hasLanding = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 1200));
     }
-
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // Wait for post-login: "Start New Booking" button
-    await page.waitForSelector('button, a, [role="button"]', { timeout: 25000 });
-    const hasStartNewBooking = await page.evaluate(() => {
-      const el = Array.from(document.querySelectorAll('button, a, [role="button"]')).find((e) =>
-        /start\s*new\s*booking/i.test(e.textContent || '')
+    if (!hasLanding) {
+      let detail = '';
+      try {
+        const pg = page as unknown as { url: () => string; screenshot: (o: { path: string }) => Promise<void> };
+        const href = pg.url();
+        const preview = (await page.evaluate(() => (document.body?.innerText || '').slice(0, 1500))) as string;
+        const { join } = await import('path');
+        const { mkdir } = await import('fs/promises');
+        const dir = join(process.cwd(), '.tmp');
+        await mkdir(dir, { recursive: true });
+        const shot = join(dir, `vfs-post-login-${Date.now()}.png`);
+        await pg.screenshot({ path: shot });
+        detail = ` url=${href} screenshot=${shot} pageText=${JSON.stringify(preview.slice(0, 800))}`;
+        logger.warn(`VFS post-login: expected landing not detected.${detail}`);
+      } catch {
+        /* ignore debug errors */
+      }
+      throw new Error(
+        `VFS: still on the sign-in page after Submit (wrong email/password, login Turnstile not completed, or UI change). Try --visible to solve captcha manually; verify .tmp/vfs-login.json.${detail}`
       );
-      return !!el;
-    });
-    if (!hasStartNewBooking) {
-      throw new Error('VFS: "Start New Booking" not found after login. Check credentials or captcha.');
     }
 
     logger.info('VFS browser: Login successful, Start New Booking visible');
     return { page, browser };
   } catch (err) {
     await browser.close();
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('ERR_INVALID_AUTH_CREDENTIALS')) {
+      const proxy = options.proxy;
+      const hasCreds = !!(proxy?.username || proxy?.password);
+      if (proxy?.server && !hasCreds) {
+        throw new Error(
+          `${msg} — proxy requires auth but no login/password (IP-whitelist mode): in Geonix allow the public egress IP from the log line "Geonix whitelist: add THIS…" — not the API auth_ip. Or set credentials via VFS_PROXY_URL / Geonix dashboard. Or run with --no-proxy`
+        );
+      }
+      throw new Error(
+        `${msg} — verify Geonix login/password or VFS_PROXY_URL (URL-encode special chars in password), or run list-vfs-dates with --no-proxy`
+      );
+    }
     throw err;
   }
 }
@@ -630,6 +957,51 @@ async function runSubmitLoop(p: VfsPageLike): Promise<void> {
 }
 
 /**
+ * Puppeteer: listen for 2xx POST/PUT to VFS API paths that look like final booking (not slot listing).
+ * Used when DOM confirmation text is missing but the SPA completed a booking call.
+ */
+function attachBookingNetworkHint(page: unknown): {
+  dispose: () => void;
+  sawLikelyBookingSuccess: () => boolean;
+} {
+  let saw = false;
+  const handler = (response: {
+    url: () => string;
+    status: () => number;
+    request: () => { method: () => string };
+  }): void => {
+    try {
+      const st = response.status();
+      if (st < 200 || st >= 300) return;
+      const method = response.request().method();
+      if (!['POST', 'PUT', 'PATCH'].includes(method)) return;
+      const url = response.url().toLowerCase();
+      if (!url.includes('vfsglobal.com')) return;
+      if (!/\/(api|graphql)\b/i.test(url)) return;
+      // Avoid common read-only availability calls
+      if (/(available|availability|calendar|dates?|slots?|times?)(\/|\?|$)/i.test(url)) return;
+      if (/(book|confirm|finalize|submit|appointment|reserve|payment|checkout)/i.test(url)) {
+        saw = true;
+        logger.info(`VFS browser: booking-like API response ${st} ${url.slice(0, 160)}`);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+  const pg = page as {
+    on: (e: string, h: typeof handler) => void;
+    off?: (e: string, h: typeof handler) => void;
+  };
+  pg.on('response', handler);
+  return {
+    dispose: () => {
+      if (typeof pg.off === 'function') pg.off('response', handler);
+    },
+    sawLikelyBookingSuccess: () => saw,
+  };
+}
+
+/**
  * After dates are shown, get first available time for the given date.
  * Clicks the day on FullCalendar when present so slot lists load (Angular/VFS).
  */
@@ -722,21 +1094,32 @@ export async function vfsBookFromPage(page: unknown, date: string, time: string)
   }
 
   await sleep(600);
-  await runSubmitLoop(p);
-  await sleep(1500);
 
-  let outcome = await evaluateBookingOutcome(p);
-  if (outcome === 'unknown') {
-    await sleep(2000);
-    outcome = await evaluateBookingOutcome(p);
-  }
+  const netHint = attachBookingNetworkHint(page);
+  try {
+    await runSubmitLoop(p);
+    await sleep(1500);
 
-  if (outcome === 'success') {
-    logger.info('VFS browser: booking confirmation detected');
-    return;
-  }
-  if (outcome === 'error') {
-    throw new Error('VFS book: submission failed or site showed an error');
+    let outcome = await evaluateBookingOutcome(p);
+    if (outcome === 'unknown') {
+      await sleep(2000);
+      outcome = await evaluateBookingOutcome(p);
+    }
+
+    if (outcome === 'success') {
+      logger.info('VFS browser: booking confirmation detected (DOM)');
+      return;
+    }
+    if (outcome === 'error') {
+      throw new Error('VFS book: submission failed or site showed an error');
+    }
+
+    if (outcome === 'unknown' && netHint.sawLikelyBookingSuccess()) {
+      logger.info('VFS browser: booking treated as success (API response observed; DOM unclear)');
+      return;
+    }
+  } finally {
+    netHint.dispose();
   }
 
   throw new Error(

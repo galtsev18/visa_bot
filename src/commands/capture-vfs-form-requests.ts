@@ -5,6 +5,8 @@
  *
  * Requires: run get-vfs-login-credentials first. Proxy (GEONIX_API_KEY, VFS_PROXY_COUNTRY)
  * and CAPTCHA_2CAPTCHA_API_KEY from Settings sheet or .env; or --visible for manual captcha.
+ *
+ * Use --with-time to run the same date click + slot read as the bot (more XHR for time/booking APIs).
  */
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
@@ -12,7 +14,11 @@ import { getConfig, validateEnvForSheets } from '../lib/config';
 import { initializeSheets, readSettingsFromSheet } from '../lib/sheets';
 import { resolveVfsProxy } from '../lib/geonixProxy';
 import { localeFromLoginUrl } from '../lib/vfsUtils';
-import { vfsBrowserLogin, vfsGetAvailableDatesFromPage } from '../lib/providers/vfsBrowserFlow';
+import {
+  vfsBrowserLogin,
+  vfsGetAvailableDatesFromPage,
+  vfsGetAvailableTimeFromPage,
+} from '../lib/providers/vfsBrowserFlow';
 import { logger } from '../lib/logger';
 
 const OUT_DIR = '.tmp';
@@ -28,6 +34,8 @@ interface CapturedRequest {
 
 export async function captureVfsFormRequestsCommand(options: {
   visible?: boolean;
+  /** After loading dates, click first available day and read time slots (more XHR for slot APIs). */
+  withTime?: boolean;
 }): Promise<void> {
   const envConfig = getConfig();
   validateEnvForSheets(envConfig);
@@ -52,6 +60,7 @@ export async function captureVfsFormRequestsCommand(options: {
   const proxy = await resolveVfsProxy({
     vfsProxyUrl: config.vfsProxyUrl ?? null,
     geonixApiKey: config.geonixApiKey ?? null,
+    geonixProxyListType: config.geonixProxyListType ?? null,
     vfsProxyCountry: config.vfsProxyCountry ?? null,
   });
   if (proxy) logger.info(`Using VFS proxy: ${proxy.server}`);
@@ -86,7 +95,15 @@ export async function captureVfsFormRequestsCommand(options: {
     visa_sub_category: creds.vfs_sub_category || 'Standard',
   };
   logger.info('Running Start New Booking and selecting options to capture requests...');
-  await vfsGetAvailableDatesFromPage(session.page, params);
+  const dates = await vfsGetAvailableDatesFromPage(session.page, params);
+  if (options.withTime && dates.length > 0) {
+    const first = dates[0];
+    logger.info(`--with-time: resolving time for first available date ${first}...`);
+    const t = await vfsGetAvailableTimeFromPage(session.page, first);
+    logger.info(`--with-time: first slot read as: ${t ?? '(none)'}`);
+  } else if (options.withTime && dates.length === 0) {
+    logger.warn('--with-time: no dates returned; skip time step');
+  }
   const browser = session.browser as { close: () => Promise<void> };
   await browser.close();
   const outPath = join(process.cwd(), OUT_DIR, OUT_FILE);

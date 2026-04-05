@@ -37,6 +37,7 @@ const KEEP_ENV_IF_SHEET_EMPTY_NUMBER = [
  * Initializes repo with env credentials, then merges sheet overrides.
  * Empty sheet values do not override env: string keys keep env when sheet is empty;
  * numeric keys keep env when sheet is 0 or NaN (empty cell).
+ * Geonix / VFS proxy keys are not in `getConfig()` from .env — they only exist in sheet overrides.
  */
 export class MergedConfigProvider implements ConfigProvider {
   constructor(
@@ -58,7 +59,7 @@ export class MergedConfigProvider implements ConfigProvider {
       const isEmpty = sheetVal === undefined || sheetVal === null || String(sheetVal).trim() === '';
       const envVal = env[key as keyof typeof env];
       if (isEmpty && envVal != null && String(envVal).trim() !== '') {
-        (merged as Record<string, unknown>)[key] = envVal;
+        (merged as unknown as Record<string, unknown>)[key] = envVal;
       }
     }
 
@@ -70,7 +71,7 @@ export class MergedConfigProvider implements ConfigProvider {
         sheetVal === null ||
         (typeof sheetVal === 'number' && (Number.isNaN(sheetVal) || sheetVal === 0));
       if (sheetEmpty && envVal != null && typeof envVal === 'number' && !Number.isNaN(envVal)) {
-        (merged as Record<string, unknown>)[key] = envVal;
+        (merged as unknown as Record<string, unknown>)[key] = envVal;
       }
     }
 

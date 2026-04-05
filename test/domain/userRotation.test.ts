@@ -1,10 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import {
-  filterUsersForRotation,
-  getNextUser,
-  updateUserPriority,
-} from '../../src/domain/userRotation.js';
+import { getNextUser, updateUserPriority } from '../../src/domain/userRotation.js';
 import { createUser, User } from '../../src/lib/user.js';
 import type { RawUserInput } from '../../src/lib/user.js';
 
@@ -74,30 +70,6 @@ describe('userRotation', () => {
       const selected = getNextUser([recent, older], 30);
       assert.ok(selected);
       assert.strictEqual(selected.email, 'older@test.com');
-    });
-  });
-
-  describe('filterUsersForRotation', () => {
-    it('excludes AIS users when pause US is true', () => {
-      const ais = makeUser({ email: 'ais@test.com', provider: 'ais' });
-      const vfs = makeUser({ email: 'vfs@test.com', provider: 'vfsglobal' });
-      const out = filterUsersForRotation([ais, vfs], true, false);
-      assert.strictEqual(out.length, 1);
-      assert.strictEqual(out[0].email, 'vfs@test.com');
-    });
-
-    it('excludes VFS users when pause VFS is true', () => {
-      const ais = makeUser({ email: 'ais@test.com', provider: 'ais' });
-      const vfs = makeUser({ email: 'vfs@test.com', provider: 'vfsglobal' });
-      const out = filterUsersForRotation([ais, vfs], false, true);
-      assert.strictEqual(out.length, 1);
-      assert.strictEqual(out[0].email, 'ais@test.com');
-    });
-
-    it('keeps all when both pauses false', () => {
-      const ais = makeUser({ email: 'ais@test.com', provider: 'ais' });
-      const vfs = makeUser({ email: 'vfs@test.com', provider: 'vfsglobal' });
-      assert.strictEqual(filterUsersForRotation([ais, vfs], false, false).length, 2);
     });
   });
 

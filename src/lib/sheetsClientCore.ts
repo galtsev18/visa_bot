@@ -17,6 +17,9 @@ const WRITE_BUFFER_MAX = 500;
 /** Сколько подряд успешных вызовов нужны, чтобы сбросить счётчик бэкоффа (чтобы один успех между 429 не обнулял прогресс). */
 const QUOTA_RESET_AFTER_CONSECUTIVE_SUCCESS = 2;
 
+/** One cell value for Sheets API read/write (booleans avoid text `TRUE`/`FALSE` with leading apostrophe in UI). */
+export type SheetCellValue = string | number | boolean;
+
 export interface SheetsCoreState {
   sheets: SheetsV4 | null;
   spreadsheetId: string | null;
@@ -34,18 +37,18 @@ type PendingWrite =
   | {
       op: 'update';
       range: string;
-      values: (string | number)[][];
+      values: SheetCellValue[][];
       valueInputOption: 'RAW' | 'USER_ENTERED';
     }
   | {
       op: 'batchUpdate';
-      updates: { range: string; values: (string | number)[][] }[];
+      updates: { range: string; values: SheetCellValue[][] }[];
       valueInputOption: 'RAW' | 'USER_ENTERED';
     }
   | {
       op: 'append';
       range: string;
-      values: (string | number)[][];
+      values: SheetCellValue[][];
       options?: { valueInputOption?: 'RAW' | 'USER_ENTERED'; insertDataOption?: 'INSERT_ROWS' | 'OVERWRITE' };
     };
 
@@ -59,11 +62,35 @@ function isQuotaError(err: unknown): boolean {
   );
 }
 
+/** Google RPC ABORTED often maps to HTTP 409 + error.errors[].reason === "aborted" (concurrency / retry). */
+function isGoogleAborted409(err: unknown): boolean {
+  const e = err as {
+    response?: { status?: number; data?: { error?: { errors?: Array<{ reason?: string }> } } };
+  };
+  if (e?.response?.status !== 409) return false;
+  const reasons = e.response?.data?.error?.errors ?? [];
+  return reasons.some((r) => r.reason === 'aborted');
+}
+
+/**
+ * Errors worth retrying with the same backoff as quota (429): quota, 5xx, socket loss, 409 aborted.
+ */
+function isRetryableSheetsError(err: unknown): boolean {
+  if (isQuotaError(err)) return true;
+  if (isSocketHangupError(err)) return true;
+  if (isGoogleAborted409(err)) return true;
+  const e = err as { response?: { status?: number } } | undefined;
+  const st = Number(e?.response?.status);
+  if (st >= 500) return true;
+  return false;
+}
+
 function isTransientError(err: unknown): boolean {
   const e = err as { response?: { status?: number } } | undefined;
   return (
     isQuotaError(err) ||
     isSocketHangupError(err) ||
+    isGoogleAborted409(err) ||
     (Number(e?.response?.status) >= 500)
   );
 }
@@ -87,16 +114,16 @@ async function withQuotaRetry<T>(s: SheetsCoreState, fn: () => Promise<T>): Prom
       }
       return result;
     } catch (error) {
-      if (!isQuotaError(error)) throw error;
+      if (!isRetryableSheetsError(error)) throw error;
       lastError = error;
       s.quotaConsecutiveSuccesses = 0;
-      if (!s.quotaExceededNotified && s.quotaNotifier) {
+      if (isQuotaError(error) && !s.quotaExceededNotified && s.quotaNotifier) {
         s.quotaNotifier('exceeded');
         s.quotaExceededNotified = true;
       }
       if (attempt === QUOTA_RETRY_MAX_ATTEMPTS) {
         logger.error(
-          `Sheets API quota exceeded after ${QUOTA_RETRY_MAX_ATTEMPTS} retries. Last error: ${formatErrorForLog(error)}`
+          `Sheets API failed after ${QUOTA_RETRY_MAX_ATTEMPTS} retries. Last error: ${formatErrorForLog(error)}`
         );
         throw error;
       }
@@ -107,9 +134,15 @@ async function withQuotaRetry<T>(s: SheetsCoreState, fn: () => Promise<T>): Prom
       );
       s.quotaRetryAttempt++;
       const isFirstBackoff = s.quotaRetryAttempt === 1;
-      const logMsg = `Sheets API quota exceeded. Progressive backoff: waiting ${waitSec}s before retry (attempt ${s.quotaRetryAttempt}/${QUOTA_RETRY_MAX_ATTEMPTS})...`;
-      if (isFirstBackoff) logger.info(logMsg);
-      else logger.debug(logMsg);
+      if (isQuotaError(error)) {
+        const logMsg = `Sheets API quota exceeded. Progressive backoff: waiting ${waitSec}s before retry (attempt ${s.quotaRetryAttempt}/${QUOTA_RETRY_MAX_ATTEMPTS})...`;
+        if (isFirstBackoff) logger.info(logMsg);
+        else logger.debug(logMsg);
+      } else {
+        const logMsg = `Sheets API transient error (${formatErrorForLog(error)}). Waiting ${waitSec}s before retry (attempt ${s.quotaRetryAttempt}/${QUOTA_RETRY_MAX_ATTEMPTS})...`;
+        if (isFirstBackoff) logger.info(logMsg);
+        else logger.debug(logMsg);
+      }
       await sleep(waitSec);
     }
   }
@@ -148,8 +181,8 @@ async function applyPendingWrite(
 }
 
 type MergedOp =
-  | { type: 'batchUpdate'; valueInputOption: 'RAW' | 'USER_ENTERED'; updates: { range: string; values: (string | number)[][] }[] }
-  | { type: 'append'; range: string; values: (string | number)[][]; options?: { valueInputOption?: 'RAW' | 'USER_ENTERED'; insertDataOption?: 'INSERT_ROWS' | 'OVERWRITE' } };
+  | { type: 'batchUpdate'; valueInputOption: 'RAW' | 'USER_ENTERED'; updates: { range: string; values: SheetCellValue[][] }[] }
+  | { type: 'append'; range: string; values: SheetCellValue[][]; options?: { valueInputOption?: 'RAW' | 'USER_ENTERED'; insertDataOption?: 'INSERT_ROWS' | 'OVERWRITE' } };
 
 /**
  * Объединяет буфер в пачки: подряд идущие update/batchUpdate — в один batchUpdate,
@@ -163,7 +196,7 @@ function mergeWriteBuffer(buffer: PendingWrite[]): { op: MergedOp; count: number
     const p = buffer[i];
     if (p.op === 'update' || p.op === 'batchUpdate') {
       const valueInputOption = p.valueInputOption;
-      const updates: { range: string; values: (string | number)[][] }[] = [];
+      const updates: { range: string; values: SheetCellValue[][] }[] = [];
       while (i < buffer.length) {
         const q = buffer[i];
         if (q.op === 'update') {
@@ -178,7 +211,7 @@ function mergeWriteBuffer(buffer: PendingWrite[]): { op: MergedOp; count: number
     } else {
       const range = p.range;
       const options = p.options;
-      const rows: (string | number)[][] = [];
+      const rows: SheetCellValue[][] = [];
       while (i < buffer.length) {
         const q = buffer[i];
         if (q.op === 'append' && q.range === range && JSON.stringify(q.options ?? {}) === JSON.stringify(options ?? {})) {
@@ -236,16 +269,16 @@ async function flushWriteBuffer(s: SheetsCoreState): Promise<void> {
 
 export interface SheetsClientCore {
   setQuotaNotifier(fn: (event: 'exceeded' | 'resolved') => void): void;
-  get(range: string): Promise<(string | number)[][]>;
-  batchGet(ranges: string[]): Promise<(string | number)[][][]>;
-  update(range: string, values: (string | number)[][], valueInputOption?: 'RAW' | 'USER_ENTERED'): Promise<void>;
+  get(range: string): Promise<SheetCellValue[][]>;
+  batchGet(ranges: string[]): Promise<SheetCellValue[][][]>;
+  update(range: string, values: SheetCellValue[][], valueInputOption?: 'RAW' | 'USER_ENTERED'): Promise<void>;
   batchUpdate(
-    updates: { range: string; values: (string | number)[][] }[],
+    updates: { range: string; values: SheetCellValue[][] }[],
     valueInputOption?: 'RAW' | 'USER_ENTERED'
   ): Promise<void>;
   append(
     range: string,
-    values: (string | number)[][],
+    values: SheetCellValue[][],
     options?: { valueInputOption?: 'RAW' | 'USER_ENTERED'; insertDataOption?: 'INSERT_ROWS' | 'OVERWRITE' }
   ): Promise<{ updatedRange?: string }>;
   getSpreadsheetMetadata(): Promise<{ sheetTitles: string[] }>;
@@ -271,7 +304,8 @@ export async function createSheetsClientCore(
     keyFile: credentialsPath,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  s.sheets = google.sheets({ version: 'v4', auth });
+  /** Longer timeout reduces spurious client-side aborts on large spreadsheets / slow networks. */
+  s.sheets = google.sheets({ version: 'v4', auth, timeout: 120_000 });
   s.spreadsheetId = spreadsheetId;
 
   return {
@@ -281,17 +315,17 @@ export async function createSheetsClientCore(
     withQuotaRetry<T>(fn: () => Promise<T>) {
       return withQuotaRetry(s, fn);
     },
-    async get(range: string): Promise<(string | number)[][]> {
+    async get(range: string): Promise<SheetCellValue[][]> {
       if (!s.sheets || !s.spreadsheetId) throw new Error('Sheets core not initialized');
       return withQuotaRetry(s, async () => {
         const response = await s.sheets!.spreadsheets.values.get({
           spreadsheetId: s.spreadsheetId!,
           range,
         });
-        return (response.data.values ?? []) as (string | number)[][];
+        return (response.data.values ?? []) as SheetCellValue[][];
       });
     },
-    async batchGet(ranges: string[]): Promise<(string | number)[][][]> {
+    async batchGet(ranges: string[]): Promise<SheetCellValue[][][]> {
       if (!s.sheets || !s.spreadsheetId) throw new Error('Sheets core not initialized');
       return withQuotaRetry(s, async () => {
         const batch = await s.sheets!.spreadsheets.values.batchGet({
@@ -299,12 +333,12 @@ export async function createSheetsClientCore(
           ranges,
         });
         const valueRanges = batch.data.valueRanges ?? [];
-        return valueRanges.map((vr) => (vr.values ?? []) as (string | number)[][]);
+        return valueRanges.map((vr) => (vr.values ?? []) as SheetCellValue[][]);
       });
     },
     async update(
       range: string,
-      values: (string | number)[][],
+      values: SheetCellValue[][],
       valueInputOption: 'RAW' | 'USER_ENTERED' = 'RAW'
     ): Promise<void> {
       if (!s.sheets || !s.spreadsheetId) throw new Error('Sheets core not initialized');
@@ -327,7 +361,7 @@ export async function createSheetsClientCore(
       }
     },
     async batchUpdate(
-      updates: { range: string; values: (string | number)[][] }[],
+      updates: { range: string; values: SheetCellValue[][] }[],
       valueInputOption: 'RAW' | 'USER_ENTERED' = 'RAW'
     ): Promise<void> {
       if (!s.sheets || !s.spreadsheetId) throw new Error('Sheets core not initialized');
@@ -352,7 +386,7 @@ export async function createSheetsClientCore(
     },
     async append(
       range: string,
-      values: (string | number)[][],
+      values: SheetCellValue[][],
       options?: { valueInputOption?: 'RAW' | 'USER_ENTERED'; insertDataOption?: 'INSERT_ROWS' | 'OVERWRITE' }
     ): Promise<{ updatedRange?: string }> {
       if (!s.sheets || !s.spreadsheetId) throw new Error('Sheets core not initialized');

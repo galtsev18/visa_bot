@@ -25,6 +25,8 @@ export interface EnvConfig {
   captchaSolver?: null;
   /** Geonix API key — only from Settings sheet (not .env). */
   geonixApiKey?: string | null;
+  /** Geonix proxy list type (ipv4, mobile, …) — only from Settings sheet. */
+  geonixProxyListType?: string | null;
   /** VFS proxy country — only from Settings sheet (e.g. Russia). */
   vfsProxyCountry?: string | null;
   /** Manual VFS proxy URL — only from Settings sheet (overrides Geonix when set). */
@@ -55,6 +57,7 @@ export function getConfig(): EnvConfig {
     captchaSolver: null,
     // Geonix/VFS proxy: only from Settings sheet (not .env)
     geonixApiKey: undefined,
+    geonixProxyListType: undefined,
     vfsProxyCountry: undefined,
     vfsProxyUrl: undefined,
   };
