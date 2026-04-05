@@ -423,37 +423,323 @@ export async function vfsGetAvailableDatesFromPage(
   return [];
 }
 
-/**
- * After dates are shown, get first available time for the given date.
- * If the page shows a calendar, the caller may need to click the given date first so the time slot
- * becomes visible (layout-dependent). Parameter _date is available for such a click if needed.
- */
-export async function vfsGetAvailableTimeFromPage(
-  page: unknown,
-  _date: string
-): Promise<string | null> {
-  const p = page as VfsPageLike;
-  const timeFromPage = await p.evaluate(() => {
-    const timeInput = document.querySelector(
-      'input[name*="time"], [data-time], .time-slot, .fc-event-time'
-    ) as HTMLInputElement | null;
-    if (timeInput && timeInput.value) return timeInput.value;
-    const timeText = document.querySelector('.fc-event-time, .time-slot');
-    return timeText ? (timeText.textContent || '').trim() : null;
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Navigate FullCalendar until a cell with data-date exists (best-effort). */
+async function ensureDateCellVisible(p: VfsPageLike, isoDate: string): Promise<void> {
+  const cellPresent = () =>
+    p.evaluate((d: string) => {
+      return !!document.querySelector(`.fc-daygrid-day[data-date="${d}"]`);
+    }, isoDate);
+
+  if (await cellPresent()) return;
+
+  for (let i = 0; i < 16; i++) {
+    await p.evaluate(() => {
+      const next = document.querySelector(
+        '.fc-next-button, button.fc-next-button, .fc-icon-chevron-right'
+      ) as HTMLElement | null;
+      next?.click();
+    });
+    await sleep(450);
+    if (await cellPresent()) return;
+  }
+  for (let i = 0; i < 16; i++) {
+    await p.evaluate(() => {
+      const prev = document.querySelector(
+        '.fc-prev-button, button.fc-prev-button, .fc-icon-chevron-left'
+      ) as HTMLElement | null;
+      prev?.click();
+    });
+    await sleep(450);
+    if (await cellPresent()) return;
+  }
+}
+
+async function clickCalendarDate(p: VfsPageLike, isoDate: string): Promise<boolean> {
+  const hasCalendar = await p.evaluate(
+    () => !!document.querySelector('.fc-daygrid, .fc-daygrid-day[data-date]')
+  );
+  if (!hasCalendar) return false;
+
+  await ensureDateCellVisible(p, isoDate);
+  return p.evaluate((d: string) => {
+    const cell =
+      (document.querySelector(`.fc-daygrid-day[data-date="${d}"]`) as HTMLElement | null) ||
+      (document.querySelector(`td[data-date="${d}"]`) as HTMLElement | null);
+    if (!cell) return false;
+    if (cell.classList.contains('fc-day-disabled')) return false;
+    cell.click();
+    return true;
+  }, isoDate);
+}
+
+async function clickDateFallback(p: VfsPageLike, isoDate: string): Promise<boolean> {
+  return p.evaluate((d: string) => {
+    const [y, m, day] = d.split('-');
+    const dmy = day && m && y ? `${day}.${m}.${y}` : '';
+    const candidates = Array.from(
+      document.querySelectorAll(
+        'a, button, [role="button"], .fc-daygrid-event, mat-list-item, tr, td, .slot-item'
+      )
+    ) as HTMLElement[];
+    for (const el of candidates) {
+      const t = el.textContent || '';
+      if (t.includes(d) || (dmy && t.includes(dmy))) {
+        el.click();
+        return true;
+      }
+    }
+    return false;
+  }, isoDate);
+}
+
+/** Select date on appointment UI (calendar or list). */
+async function selectAppointmentDateOnPage(p: VfsPageLike, isoDate: string): Promise<boolean> {
+  if (await clickCalendarDate(p, isoDate)) return true;
+  return clickDateFallback(p, isoDate);
+}
+
+async function selectTimeSlot(p: VfsPageLike, time: string): Promise<boolean> {
+  return p.evaluate((wanted: string) => {
+    const matchText = (txt: string) => {
+      const n = txt.replace(/\s+/g, ' ').trim().toLowerCase();
+      const w = wanted.replace(/\s+/g, ' ').trim().toLowerCase();
+      if (!n || !w) return false;
+      if (n === w) return true;
+      const digits = (x: string) => x.replace(/[^\d:]/g, '');
+      const dn = digits(n);
+      const dw = digits(w);
+      if (dn.length >= 3 && dn === dw) return true;
+      return n.includes(w) || w.includes(n);
+    };
+
+    const selectors = [
+      'mat-option',
+      '.mat-mdc-option',
+      '[role="option"]',
+      '.fc-timegrid-event',
+      '.fc-event',
+      '.fc-list-event',
+      '.time-slot',
+      '[class*="time-slot"]',
+      '[data-slot]',
+      'button',
+      'a',
+      'li',
+    ].join(', ');
+
+    const nodes = Array.from(document.querySelectorAll(selectors)) as HTMLElement[];
+    const scored = nodes.filter((el) => matchText(el.textContent || ''));
+    if (scored.length === 0) return false;
+    scored.sort((a, b) => (a.textContent || '').length - (b.textContent || '').length);
+    scored[0].click();
+    return true;
+  }, time);
+}
+
+async function selectTimeSlotWithRetry(p: VfsPageLike, time: string): Promise<boolean> {
+  for (let i = 0; i < 5; i++) {
+    if (await selectTimeSlot(p, time)) return true;
+    await sleep(500);
+  }
+  return false;
+}
+
+async function clickNextBookingStep(p: VfsPageLike): Promise<boolean> {
+  return p.evaluate(() => {
+    const nodes = Array.from(
+      document.querySelectorAll(
+        'button, [role="button"], input[type="submit"], a.mat-mdc-button, .mat-mdc-button, .mdc-button'
+      )
+    ) as HTMLElement[];
+    let best: { el: HTMLElement; score: number } | null = null;
+    for (const el of nodes) {
+      if ((el as HTMLButtonElement).disabled) continue;
+      const txt = (
+        el.textContent ||
+        (el as HTMLInputElement).value ||
+        el.getAttribute('aria-label') ||
+        ''
+      ).trim();
+      if (!txt) continue;
+      const lower = txt.toLowerCase();
+      let score = 0;
+      if (
+        /^(confirm|submit|book|continue|next|proceed|pay|schedule)\b/i.test(txt) ||
+        /^(подтверд|далее|продолж|записаться|отправить|оформить)/i.test(txt)
+      )
+        score = 100;
+      else if (
+        /confirm|book\s*appointment|submit|continue|next\s*step|proceed\s*to/i.test(lower) ||
+        /подтверждени|запись\s*на|продолжить|далее/i.test(lower)
+      )
+        score = 60;
+      else if (/^ok$|^yes$/i.test(txt)) score = 40;
+      if (score > 0 && (!best || score > best.score)) best = { el, score };
+    }
+    if (!best) return false;
+    best.el.click();
+    return true;
   });
-  return timeFromPage || null;
+}
+
+async function evaluateBookingOutcome(p: VfsPageLike): Promise<'success' | 'error' | 'unknown'> {
+  return p.evaluate(() => {
+    const body = document.body.innerText.toLowerCase();
+    const href = window.location.href.toLowerCase();
+
+    if (
+      /appointment\s*(has\s*been)?\s*confirmed|booking\s*confirmed|successfully\s*booked|your\s*reference|confirmation\s*number|booking\s*reference/i.test(
+        body
+      ) ||
+      /подтвержден|успешно\s*записан|запись\s*оформлен|номер\s*заявк/i.test(body)
+    )
+      return 'success';
+    if (
+      /(\berror\b|failed|unavailable|sold out|session\s*expired|something\s*went\s*wrong|unable\s*to\s*book)/i.test(
+        body
+      ) ||
+      /ошибк|не\s*удалось|недоступн|истекла\s*сессия/i.test(body)
+    )
+      return 'error';
+    if (href.includes('confirm') || href.includes('success') || href.includes('appointment-conf'))
+      return 'success';
+    const snack = document.querySelector(
+      'mat-snack-bar-container, .mat-mdc-snack-bar-container, simple-snack-bar'
+    );
+    const st = (snack?.textContent || '').toLowerCase();
+    if (st && /error|fail/i.test(st)) return 'error';
+    return 'unknown';
+  });
+}
+
+async function runSubmitLoop(p: VfsPageLike): Promise<void> {
+  if ((await evaluateBookingOutcome(p)) === 'success') return;
+
+  for (let i = 0; i < 10; i++) {
+    const clicked = await clickNextBookingStep(p);
+    if (!clicked) break;
+    await sleep(1200);
+    const after = await evaluateBookingOutcome(p);
+    if (after === 'success') return;
+    if (after === 'error') throw new Error('VFS book: the site reported an error after submit');
+  }
 }
 
 /**
- * Submit booking for date and time (placeholder: VFS form varies by locale).
+ * After dates are shown, get first available time for the given date.
+ * Clicks the day on FullCalendar when present so slot lists load (Angular/VFS).
  */
-export async function vfsBookFromPage(
-  _page: unknown,
-  _date: string,
-  _time: string
-): Promise<void> {
-  logger.warn('VFS browser book() not fully implemented; submit step depends on locale.');
+export async function vfsGetAvailableTimeFromPage(page: unknown, date: string): Promise<string | null> {
+  const p = page as VfsPageLike;
+
+  const hasCalendar = await p.evaluate(
+    () => !!document.querySelector('.fc-daygrid, .fc-daygrid-day[data-date]')
+  );
+  if (hasCalendar) {
+    const ok = await selectAppointmentDateOnPage(p, date);
+    if (!ok) {
+      logger.warn(
+        `VFS: could not click calendar day ${date} before reading time; trying to read slots anyway`
+      );
+    }
+    await sleep(700);
+  }
+
+  const timeFromPage = await p.evaluate(() => {
+    const pickFromText = (raw: string | null | undefined): string | null => {
+      const t = (raw || '').trim();
+      if (!t) return null;
+      const m = t.match(/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?\b/i);
+      return m ? m[0].trim() : null;
+    };
+
+    const trySelectors = [
+      'input[name*="time"]',
+      '[data-time]',
+      '.fc-event-time',
+      '.fc-timegrid-event',
+      '.time-slot',
+      'mat-option',
+      '.mat-mdc-option',
+      '[role="option"]',
+    ];
+    for (const sel of trySelectors) {
+      const el = document.querySelector(sel) as HTMLElement | HTMLInputElement | null;
+      if (!el) continue;
+      const v = 'value' in el && el.value ? el.value : el.textContent;
+      const picked = pickFromText(v || el.textContent);
+      if (picked) return picked;
+    }
+
+    const listEls = Array.from(
+      document.querySelectorAll('mat-option, .mat-mdc-option, [role="option"], button, li')
+    );
+    for (const el of listEls) {
+      const picked = pickFromText(el.textContent);
+      if (picked) return picked;
+    }
+
+    const timeText = document.querySelector('.fc-event-time, .time-slot');
+    return timeText ? (timeText.textContent || '').trim() : null;
+  });
+
+  if (timeFromPage) return timeFromPage;
+
+  const fromList = await p.evaluate(() => {
+    const items = Array.from(document.querySelectorAll('mat-option, [role="option"], button, li'));
+    for (const el of items) {
+      const t = (el.textContent || '').trim();
+      if (/\d{1,2}:\d{2}/.test(t)) return t.match(/\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]m)?/i)?.[0] || t;
+    }
+    return null;
+  });
+  return fromList || null;
+}
+
+/**
+ * Submit booking: select date, time slot, then confirm (Angular / FullCalendar patterns).
+ */
+export async function vfsBookFromPage(page: unknown, date: string, time: string): Promise<void> {
+  const p = page as VfsPageLike;
+  logger.info(`VFS browser: submitting booking for ${date} ${time}`);
+
+  const dateOk = await selectAppointmentDateOnPage(p, date);
+  if (!dateOk) {
+    throw new Error(
+      `VFS book: could not select date ${date} (no matching calendar cell or list row)`
+    );
+  }
+  await sleep(800);
+
+  if (!(await selectTimeSlotWithRetry(p, time))) {
+    throw new Error(
+      `VFS book: could not find or click time slot matching "${time}". Is the slot list open?`
+    );
+  }
+
+  await sleep(600);
+  await runSubmitLoop(p);
+  await sleep(1500);
+
+  let outcome = await evaluateBookingOutcome(p);
+  if (outcome === 'unknown') {
+    await sleep(2000);
+    outcome = await evaluateBookingOutcome(p);
+  }
+
+  if (outcome === 'success') {
+    logger.info('VFS browser: booking confirmation detected');
+    return;
+  }
+  if (outcome === 'error') {
+    throw new Error('VFS book: submission failed or site showed an error');
+  }
+
   throw new Error(
-    'VFS Global book() not yet implemented for this locale. Implement submit flow in vfsBrowserFlow.'
+    'VFS book: could not verify success (no confirmation text/URL matched). Check the portal or extend vfsBrowserFlow.evaluateBookingOutcome.'
   );
 }
